@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.moneyhabits.app"
+    namespace = "com.wealthhabits.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.moneyhabits.app"
+        applicationId = "com.wealthhabits.app"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
