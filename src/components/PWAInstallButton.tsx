@@ -14,6 +14,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const [showIOSGuide, setShowIOSGuide] = useState(false);
   const [installSuccess, setInstallSuccess] = useState(false);
+  const [showDesktopGuide, setShowDesktopGuide] = useState(false);
 
   // If already running as an installed standalone PWA, hide install prompts
   if (isInstalled) {
@@ -124,8 +125,6 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   }
 
   // Generic / desktop helper if browser hasn't fired beforeinstallprompt or on standard browser
-  const [showDesktopGuide, setShowDesktopGuide] = useState(false);
-
   return (
     <>
       <button

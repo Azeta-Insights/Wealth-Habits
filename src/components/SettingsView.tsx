@@ -83,7 +83,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     const rows = transactions
       .map((t) => {
         const d = new Date(t.timestamp).toISOString();
-        return `"${d}","${t.category}","${t.type}","${t.amount}","${t.narration.replace(/"/g, '""')}","${t.bankName || ''}","${t.source}","${t.reflection || ''}"`;
+        const safeNarr = (t.narration || '').replace(/"/g, '""');
+        return `"${d}","${t.category}","${t.type}","${t.amount}","${safeNarr}","${t.bankName || ''}","${t.source}","${t.reflection || ''}"`;
       })
       .join('\n');
 
@@ -190,22 +191,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       background: 'linear-gradient(135deg, #15803D 0%, #059669 60%, #047857 100%)'
                     }}
                   >
-                    {userProfile ? userProfile.displayName.charAt(0).toUpperCase() : <User className="w-6 h-6" />}
+                    {userProfile?.displayName?.trim() ? (
+                      userProfile.displayName.trim().charAt(0).toUpperCase()
+                    ) : userProfile?.email?.trim() ? (
+                      userProfile.email.trim().charAt(0).toUpperCase()
+                    ) : (
+                      <User className="w-6 h-6" />
+                    )}
                   </div>
                 )}
                 <div>
                   <h3 className="font-editorial text-lg sm:text-xl font-bold text-[#143D22]">
-                    {userProfile ? userProfile.displayName : 'Guest User'}
+                    {userProfile?.displayName || userProfile?.email || 'Guest User'}
                   </h3>
                   <p className="text-xs text-[#4A6352]">
                     {userProfile?.email || 'Local session active'}
                   </p>
-                  {auth.currentUser && (
+                  {auth?.currentUser && (
                     <div className="flex items-center gap-1.5 mt-1">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#D1FAE5] text-[#065F46] border border-[#A7F3D0]/60">
                         {auth.currentUser.isAnonymous
                           ? 'Guest Mode'
-                          : auth.currentUser.providerData[0]?.providerId === 'google.com'
+                          : auth.currentUser.providerData && auth.currentUser.providerData.length > 0 && auth.currentUser.providerData[0]?.providerId === 'google.com'
                           ? 'Google Account'
                           : 'Email Account'}
                       </span>

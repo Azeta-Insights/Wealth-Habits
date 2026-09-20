@@ -10,6 +10,7 @@ import { StatementReviewModal } from './components/StatementReviewModal';
 import { SettingsView } from './components/SettingsView';
 import { PinLockModal } from './components/PinLockModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import {
   CategoryKey,
   ReflectionType,
@@ -328,45 +329,47 @@ export function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-20 relative z-10">
-        {activeTab === 'insights' && (
-          <InsightsView
-            insights={insights}
-            allTransactions={transactions}
-            userProfile={userProfile}
-            onAnswerReflection={handleAnswerReflection}
-            onNavigateToAdd={() => setActiveTab('add')}
-            onNavigateToTransactions={() => setActiveTab('transactions')}
-          />
-        )}
+        <ErrorBoundary fallbackTitle="Unable to display this tab">
+          {activeTab === 'insights' && (
+            <InsightsView
+              insights={insights}
+              allTransactions={transactions}
+              userProfile={userProfile}
+              onAnswerReflection={handleAnswerReflection}
+              onNavigateToAdd={() => setActiveTab('add')}
+              onNavigateToTransactions={() => setActiveTab('transactions')}
+            />
+          )}
 
-        {activeTab === 'transactions' && (
-          <TransactionsView
-            transactions={transactions}
-            onToggleReflection={handleToggleTransactionReflection}
-            onUpdateCategory={handleUpdateCategory}
-            onDeleteTransaction={handleDeleteTransaction}
-          />
-        )}
+          {activeTab === 'transactions' && (
+            <TransactionsView
+              transactions={transactions}
+              onToggleReflection={handleToggleTransactionReflection}
+              onUpdateCategory={handleUpdateCategory}
+              onDeleteTransaction={handleDeleteTransaction}
+            />
+          )}
 
-        {activeTab === 'add' && (
-          <AddImportView
-            onAddManual={handleAddManual}
-            onAddBatchTransactions={handleAddBatchTransactions}
-            onOpenStatementReview={(res) => setReviewStatementResult(res)}
-          />
-        )}
+          {activeTab === 'add' && (
+            <AddImportView
+              onAddManual={handleAddManual}
+              onAddBatchTransactions={handleAddBatchTransactions}
+              onOpenStatementReview={(res) => setReviewStatementResult(res)}
+            />
+          )}
 
-        {activeTab === 'settings' && (
-          <SettingsView
-            userProfile={userProfile}
-            transactions={transactions}
-            onOpenSignIn={() => setIsSignInModalOpen(true)}
-            onSignOut={handleSignOut}
-            onDeleteStatementData={handleDeleteStatementData}
-            onDeleteAllData={handleDeleteAllData}
-            onSessionLocked={() => setIsLocked(true)}
-          />
-        )}
+          {activeTab === 'settings' && (
+            <SettingsView
+              userProfile={userProfile}
+              transactions={transactions}
+              onOpenSignIn={() => setIsSignInModalOpen(true)}
+              onSignOut={handleSignOut}
+              onDeleteStatementData={handleDeleteStatementData}
+              onDeleteAllData={handleDeleteAllData}
+              onSessionLocked={() => setIsLocked(true)}
+            />
+          )}
+        </ErrorBoundary>
       </main>
 
       {/* Floating Action Button (FAB) with High Energy Gradient & Ripple */}

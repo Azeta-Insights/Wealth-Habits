@@ -2,12 +2,13 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { CategoryKey, StatementParseResult, TransactionEntity, TransactionType } from '../types';
 import { generateSimpleHash, identifyBankName, matchCategoryFromNarration } from './smsParser';
 
-// Configure pdfjs worker
+// Configure pdfjs worker: prefer local worker first, fallback to CDN
 if (typeof window !== 'undefined') {
   try {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.10.38'}/pdf.worker.min.mjs`;
+    // Try self-hosted worker first
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
   } catch (e) {
-    console.warn('Could not set custom pdfjs worker path', e);
+    console.warn('Could not set pdfjs worker path', e);
   }
 }
 

@@ -104,10 +104,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <img src={userProfile.photoUrl} alt="" className="w-6 h-6 rounded-full object-cover" />
                 ) : (
                   <div className="w-6 h-6 rounded-full bg-[#3D5A45] text-white flex items-center justify-center text-[11px] font-bold">
-                    {userProfile.displayName.charAt(0).toUpperCase()}
+                    {(userProfile.displayName?.trim() || userProfile.email?.trim() || 'U').charAt(0).toUpperCase()}
                   </div>
                 )}
-                <span className="font-semibold">{userProfile.displayName}</span>
+                <span className="font-semibold">{userProfile.displayName || userProfile.email || 'Account'}</span>
               </button>
             ) : (
               <button

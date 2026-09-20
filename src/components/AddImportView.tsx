@@ -173,10 +173,12 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
 
         if (errObj?.name === 'PasswordException' || (errObj?.message && errObj.message.toLowerCase().includes('password'))) {
           setPendingPdfFile(file);
-          setPdfPasswordError('This bank statement PDF is password-protected. Please enter the password (e.g. phone number or account number).');
+          setPdfPasswordError('This bank statement PDF is password-protected. Please enter your password (e.g. your phone number or account number).');
         } else {
           console.error('PDF parsing error', err);
-          setStatementParsingError('Could not parse PDF. Please check if the document contains readable text rather than scanned images.');
+          setStatementParsingError(
+            'Could not extract text from this PDF. Many Nigerian banks offer CSV/Excel statement downloads in online banking, or you can copy and paste your debit/credit alert SMS directly in the "Paste SMS Alert" tab above.'
+          );
         }
       }
     } else {

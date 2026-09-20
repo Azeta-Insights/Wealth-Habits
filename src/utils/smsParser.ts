@@ -55,27 +55,34 @@ export function identifyBankName(sender?: string | null, body?: string | null): 
 
 export function isDebitAlert(lower: string): boolean {
   const debitKeywords = [
-    'debited', 'debit', 'dr:', 'dr.', 'dr ', 'txn:debit', 'withdrawal',
+    'debited', 'debit', 'dr:', 'dr.', 'dr ', 'txn:dr', 'txn: dr', 'txn:debit', 'withdrawal',
     'sent to', 'paid to', 'transferred to', 'transfer to', 'purchased',
-    'pos purchase', 'web purchase', 'you just spent', 'you sent'
+    'pos purchase', 'web purchase', 'you just spent', 'you sent', 'tx:dr',
+    'outward', 'withdrawn', 'atm wdl', 'pos:'
   ];
   return debitKeywords.some(k => lower.includes(k));
 }
 
 export function isCreditAlert(lower: string): boolean {
   const creditKeywords = [
-    'credited', 'credit', 'cr:', 'cr.', 'cr ', 'txn:credit', 'deposit',
+    'credited', 'credit', 'cr:', 'cr.', 'cr ', 'txn:cr', 'txn: cr', 'txn:credit', 'deposit',
     'received from', 'received', 'acct credited', 'reversal credit',
-    'refund', 'inward transfer'
+    'refund', 'inward transfer', 'inward', 'tx:cr', 'bills to', 'acct was credited'
   ];
   return creditKeywords.some(k => lower.includes(k));
 }
 
 export function extractAmount(text: string): number | null {
   const patterns = [
-    /(?:NGN|₦|N|Amt|Amount|value|of)\s*[:]?\s*(?:NGN|₦|N)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i,
-    /(?:debited|credited|spent|sent|received|paid)\s*(?:with|for)?\s*(?:NGN|₦|N)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i,
+    // Amt:NGN 50,000.00 or Amt: 50,000.00 or Amount: NGN50000
+    /(?:Amt|Amount|value|val)\s*[:=\-]?\s*(?:NGN|₦|N)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i,
+    // NGN 50,000.00 or ₦50,000.00
+    /(?:NGN|₦)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i,
+    // debited with / credited with
+    /(?:debited|credited|spent|sent|received|paid)\s*(?:with|for|of)?\s*(?:NGN|₦|N)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i,
+    // Numbers with commas and decimals like 50,000.00
     /([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]{2}))/,
+    // Plain NGN / ₦ followed by digits
     /(?:NGN|₦)\s*([0-9]+(?:\.[0-9]{1,2})?)/i
   ];
 
@@ -92,10 +99,61 @@ export function extractAmount(text: string): number | null {
   return null;
 }
 
+export function extractDateFromAlert(text: string): number {
+  // Common Nigerian bank date patterns:
+  // Date:12-08-2026 13:40 or Date: 12/08/2026 or 12-Aug-2026
+  const datePatterns = [
+    /(?:Date|Time|On)\s*[:=\-]?\s*([0-3]?[0-9][\/\-\.](?:[0-1]?[0-9]|[A-Za-z]{3})[\/\-\.](?:20[2-3][0-9]|[0-9]{2}))(?:\s+([0-2]?[0-9]:[0-5][0-9](?::[0-5][0-9])?))?/i,
+    /([0-3]?[0-9][\/\-\.](?:[0-1]?[0-9]|[A-Za-z]{3})[\/\-\.](?:20[2-3][0-9]|[0-9]{2}))/
+  ];
+
+  for (const pattern of datePatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const rawDateStr = match[1];
+      const timeStr = match[2] || '';
+      const parts = rawDateStr.split(/[\/\-\.]/);
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parts[1];
+        let year = parseInt(parts[2], 10);
+        if (year < 100) year += 2000;
+
+        const months: Record<string, number> = {
+          jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+          jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+        };
+
+        let monthNum = 0;
+        if (isNaN(Number(month))) {
+          monthNum = months[month.toLowerCase().substring(0, 3)] ?? 0;
+        } else {
+          monthNum = Math.max(0, parseInt(month, 10) - 1);
+        }
+
+        let hours = 12;
+        let mins = 0;
+        if (timeStr) {
+          const timeParts = timeStr.split(':');
+          hours = parseInt(timeParts[0], 10) || 12;
+          mins = parseInt(timeParts[1], 10) || 0;
+        }
+
+        const d = new Date(year, monthNum, day, hours, mins);
+        if (!isNaN(d.getTime())) {
+          return d.getTime();
+        }
+      }
+    }
+  }
+
+  return Date.now();
+}
+
 export function extractNarration(text: string, isDebit: boolean): string {
   const lines = text.split('\n');
   const prefixes = [
-    'desc:', 'desc -', 'description:', 'narration:', 'narr:',
+    'des:', 'desc:', 'desc -', 'description:', 'narration:', 'narr:',
     'details:', 'remarks:', 'info:', 'to:', 'from:', 'ref:'
   ];
 
@@ -112,7 +170,7 @@ export function extractNarration(text: string, isDebit: boolean): string {
   }
 
   // Regex match
-  const regex = /(?:desc|narration|details|narr|to|at|paid to|for)\s*[:\-]?\s*([A-Za-z0-9\s/_\-]+?)(?:\s+on|\.|\sat|\sBal|Date:|Bal:|\n|$)/i;
+  const regex = /(?:desc|des|narration|details|narr|to|at|paid to|for)\s*[:\-]?\s*([A-Za-z0-9\s/_\-]+?)(?:\s+on|\.|\sat|\sBal|Date:|Bal:|\n|$)/i;
   const match = text.match(regex);
   if (match && match[1]) {
     const found = match[1].trim();
@@ -161,7 +219,7 @@ export function generateSimpleHash(
 export function parseSmsText(
   body: string,
   sender?: string,
-  timestamp: number = Date.now()
+  timestamp?: number
 ): Omit<TransactionEntity, 'id'> | null {
   if (!body || !body.trim()) return null;
   const lowerBody = body.toLowerCase();
@@ -174,6 +232,7 @@ export function parseSmsText(
   const amount = extractAmount(body);
   if (!amount || amount <= 0) return null;
 
+  const resolvedTimestamp = timestamp || extractDateFromAlert(body);
   const bankName = identifyBankName(sender, body);
   const narration = extractNarration(body, debit);
   let category = matchCategoryFromNarration(narration);
@@ -181,7 +240,7 @@ export function parseSmsText(
     category = matchCategoryFromNarration(body);
   }
 
-  const hash = generateSimpleHash(bankName, amount, type, timestamp, narration);
+  const hash = generateSimpleHash(bankName, amount, type, resolvedTimestamp, narration);
 
   return {
     amount,
@@ -190,7 +249,7 @@ export function parseSmsText(
     narration,
     bankName,
     source: 'SMS',
-    timestamp,
+    timestamp: resolvedTimestamp,
     deduplicationHash: hash
   };
 }
