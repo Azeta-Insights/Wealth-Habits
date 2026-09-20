@@ -15,4 +15,9 @@
 .cxx
 local.properties
 .env
+.env.local
+.env.*.local
+*.local
+*.pem
+*.key
 debug.keystore

@@ -173,31 +173,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {/* Left Column: Account, Install & Banks */}
         <div className="space-y-6">
-          {/* 1. Profile Card */}
-          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E8E2D9] shadow-sm space-y-4">
+          {/* 1. Profile Card with Modern Emerald Styling */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E2EBDC] shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center space-x-4">
                 {userProfile?.photoUrl ? (
                   <img
                     src={userProfile.photoUrl}
                     alt=""
-                    className="w-14 h-14 rounded-2xl object-cover ring-2 ring-[#3D5A45]/20"
+                    className="w-14 h-14 rounded-2xl object-cover ring-2 ring-[#059669]/30 shadow-sm"
                   />
                 ) : (
-                  <div className="w-14 h-14 rounded-2xl bg-[#3D5A45] text-white flex items-center justify-center text-xl font-bold font-editorial">
+                  <div
+                    className="w-14 h-14 rounded-2xl text-white flex items-center justify-center text-xl font-bold font-editorial shadow-md shadow-[#059669]/20"
+                    style={{
+                      background: 'linear-gradient(135deg, #15803D 0%, #059669 60%, #047857 100%)'
+                    }}
+                  >
                     {userProfile ? userProfile.displayName.charAt(0).toUpperCase() : <User className="w-6 h-6" />}
                   </div>
                 )}
                 <div>
-                  <h3 className="font-editorial text-lg sm:text-xl font-bold text-[#233227]">
+                  <h3 className="font-editorial text-lg sm:text-xl font-bold text-[#143D22]">
                     {userProfile ? userProfile.displayName : 'Guest User'}
                   </h3>
-                  <p className="text-xs text-[#636C62]">
+                  <p className="text-xs text-[#4A6352]">
                     {userProfile?.email || 'Local session active'}
                   </p>
                   {auth.currentUser && (
                     <div className="flex items-center gap-1.5 mt-1">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#E4ECE4] text-[#344D3A]">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#D1FAE5] text-[#065F46] border border-[#A7F3D0]/60">
                         {auth.currentUser.isAnonymous
                           ? 'Guest Mode'
                           : auth.currentUser.providerData[0]?.providerId === 'google.com'
@@ -215,13 +220,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <>
                     <button
                       onClick={onOpenSignIn}
-                      className="px-3.5 py-2 rounded-xl border border-[#D5CBBF] text-xs font-semibold text-[#233227] hover:bg-[#FAF7F2] transition"
+                      className="px-3.5 py-2 rounded-xl border border-[#CCE3D1] text-xs font-bold text-[#143D22] hover:bg-[#F0FDF4] transition active:scale-95"
                     >
                       Account Details
                     </button>
                     <button
                       onClick={onSignOut}
-                      className="px-3.5 py-2 rounded-xl border border-[#D5CBBF] text-xs font-semibold text-[#B25E1A] hover:bg-[#FEF3EB] flex items-center space-x-1 transition"
+                      className="px-3.5 py-2 rounded-xl border border-[#FDE68A] text-xs font-bold text-[#D97706] hover:bg-[#FFFBEB] flex items-center space-x-1 transition active:scale-95"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       <span>Sign Out</span>
@@ -230,7 +235,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 ) : (
                   <button
                     onClick={onOpenSignIn}
-                    className="px-4 py-2 rounded-xl bg-[#3D5A45] text-white text-xs font-semibold hover:bg-[#344D3A] flex items-center space-x-1.5 shadow-sm transition"
+                    className="px-4 py-2 rounded-xl text-white text-xs font-bold flex items-center space-x-1.5 shadow-md shadow-[#059669]/20 transition active:scale-95"
+                    style={{
+                      background: 'linear-gradient(135deg, #15803D 0%, #059669 100%)'
+                    }}
                   >
                     <LogIn className="w-3.5 h-3.5" />
                     <span>Sign In</span>

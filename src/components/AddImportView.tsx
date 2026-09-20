@@ -214,49 +214,49 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
 
   return (
     <div className="space-y-6 pb-16 animate-fadeIn w-full">
-      {/* Sub Tabs Selector */}
-      <div className="flex bg-[#EFE9DE] p-1.5 rounded-2xl w-full max-w-2xl mx-auto border border-[#E2D9CA]">
+      {/* Sub Tabs Selector with Vibrant Emerald & Gold Badging */}
+      <div className="flex bg-[#EBF3EC] p-1.5 rounded-2xl w-full max-w-2xl mx-auto border border-[#CCE3D1] shadow-xs">
         <button
           onClick={() => setActiveSubTab('paste')}
-          className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center space-x-1.5 ${
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center space-x-1.5 ${
             activeSubTab === 'paste'
-              ? 'bg-white text-[#233227] shadow-sm'
-              : 'text-[#636C62] hover:text-[#233227]'
+              ? 'bg-white text-[#143D22] shadow-sm ring-1 ring-[#10B981]/20'
+              : 'text-[#44664F] hover:text-[#143D22]'
           }`}
         >
-          <Sparkles className="w-4 h-4 text-[#3D5A45]" />
+          <Sparkles className={`w-4 h-4 ${activeSubTab === 'paste' ? 'text-[#059669]' : 'text-[#659775]'}`} />
           <span>Paste Bank Alert</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('statement')}
-          className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center space-x-1.5 ${
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center space-x-1.5 ${
             activeSubTab === 'statement'
-              ? 'bg-white text-[#233227] shadow-sm'
-              : 'text-[#636C62] hover:text-[#233227]'
+              ? 'bg-white text-[#143D22] shadow-sm ring-1 ring-[#10B981]/20'
+              : 'text-[#44664F] hover:text-[#143D22]'
           }`}
         >
-          <FileText className="w-4 h-4 text-[#3D5A45]" />
+          <FileText className={`w-4 h-4 ${activeSubTab === 'statement' ? 'text-[#059669]' : 'text-[#659775]'}`} />
           <span>PDF / CSV Statement</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('manual')}
-          className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center space-x-1.5 ${
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center space-x-1.5 ${
             activeSubTab === 'manual'
-              ? 'bg-white text-[#233227] shadow-sm'
-              : 'text-[#636C62] hover:text-[#233227]'
+              ? 'bg-white text-[#143D22] shadow-sm ring-1 ring-[#10B981]/20'
+              : 'text-[#44664F] hover:text-[#143D22]'
           }`}
         >
-          <PlusCircle className="w-4 h-4 text-[#3D5A45]" />
+          <PlusCircle className={`w-4 h-4 ${activeSubTab === 'manual' ? 'text-[#059669]' : 'text-[#659775]'}`} />
           <span>Manual Entry</span>
         </button>
       </div>
 
       {manualSuccessMsg && (
-        <div className="max-w-2xl mx-auto p-4 rounded-2xl bg-[#E4ECE4] text-[#233227] text-xs font-semibold flex items-center justify-between border border-[#3D5A45]/30 shadow-sm animate-fadeIn">
+        <div className="max-w-2xl mx-auto p-4 rounded-2xl bg-[#D1FAE5] text-[#065F46] text-xs font-bold flex items-center justify-between border border-[#A7F3D0] shadow-sm animate-fadeIn">
           <div className="flex items-center space-x-2">
-            <CheckCircle2 className="w-4 h-4 text-[#3D5A45]" />
+            <CheckCircle2 className="w-4 h-4 text-[#059669]" />
             <span>{manualSuccessMsg}</span>
           </div>
         </div>

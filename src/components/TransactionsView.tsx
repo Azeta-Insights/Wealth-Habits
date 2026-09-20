@@ -171,25 +171,25 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
   return (
     <div className="space-y-5 pb-16 animate-fadeIn w-full">
-      {/* Responsive Filter Overview Ribbon */}
+      {/* Responsive Filter Overview Ribbon with Vivid Badging */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="bg-white p-4 rounded-2xl border border-[#E8E2D9] shadow-sm">
-          <p className="text-[10px] uppercase font-bold tracking-wider text-[#8A9588]">Total Inflow</p>
-          <p className="text-sm sm:text-lg font-bold text-[#20603D] mt-0.5">{formatNaira(totalInflow)}</p>
+        <div className="bg-white p-4 rounded-2xl border border-[#E2EBDC] shadow-xs hover:border-[#10B981]/40 transition-all">
+          <p className="text-[10px] uppercase font-bold tracking-wider text-[#059669]">Total Inflow</p>
+          <p className="text-sm sm:text-lg font-bold text-[#047857] mt-0.5">{formatNaira(totalInflow)}</p>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-[#E8E2D9] shadow-sm">
-          <p className="text-[10px] uppercase font-bold tracking-wider text-[#8A9588]">Total Outflow</p>
-          <p className="text-sm sm:text-lg font-bold text-[#C84A32] mt-0.5">{formatNaira(totalOutflow)}</p>
+        <div className="bg-white p-4 rounded-2xl border border-[#E2EBDC] shadow-xs hover:border-[#F43F5E]/30 transition-all">
+          <p className="text-[10px] uppercase font-bold tracking-wider text-[#E11D48]">Total Outflow</p>
+          <p className="text-sm sm:text-lg font-bold text-[#BE123C] mt-0.5">{formatNaira(totalOutflow)}</p>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-[#E8E2D9] shadow-sm">
-          <p className="text-[10px] uppercase font-bold tracking-wider text-[#8A9588]">Net Variance</p>
-          <p className={`text-sm sm:text-lg font-bold mt-0.5 ${netDiff >= 0 ? 'text-[#20603D]' : 'text-[#C84A32]'}`}>
+        <div className="bg-white p-4 rounded-2xl border border-[#E2EBDC] shadow-xs hover:border-[#10B981]/40 transition-all">
+          <p className="text-[10px] uppercase font-bold tracking-wider text-[#659775]">Net Variance</p>
+          <p className={`text-sm sm:text-lg font-bold mt-0.5 ${netDiff >= 0 ? 'text-[#047857]' : 'text-[#BE123C]'}`}>
             {netDiff >= 0 ? '+' : ''}{formatNaira(netDiff)}
           </p>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-[#E8E2D9] shadow-sm">
-          <p className="text-[10px] uppercase font-bold tracking-wider text-[#8A9588]">Auto-Categorized</p>
-          <p className="text-sm sm:text-lg font-bold text-[#233227] mt-0.5">
+        <div className="bg-white p-4 rounded-2xl border border-[#E2EBDC] shadow-xs hover:border-[#F59E0B]/40 transition-all">
+          <p className="text-[10px] uppercase font-bold tracking-wider text-[#D97706]">Auto-Categorized</p>
+          <p className="text-sm sm:text-lg font-bold text-[#143D22] mt-0.5">
             {categorizedPct}% ({categorizedCount}/{filteredTransactions.length})
           </p>
         </div>

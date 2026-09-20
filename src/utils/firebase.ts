@@ -27,20 +27,24 @@ import {
 } from 'firebase/firestore';
 import { TransactionEntity, ReflectionType, UserProfile } from '../types';
 
-// The user's approved Firebase configuration
+import firebaseAppletConfig from '../../firebase-applet-config.json';
+
+// Firebase client configuration loaded safely
 export const firebaseConfig = {
-  apiKey: "AIzaSyAdpjUFhzGEA4s_ktJG9cdHUhPVJXcACO0",
-  authDomain: "wealthhabitsapp.firebaseapp.com",
-  projectId: "wealthhabitsapp",
-  storageBucket: "wealthhabitsapp.firebasestorage.app",
-  messagingSenderId: "270226524718",
-  appId: "1:270226524718:web:8d4e112e844afc2738edbf"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseAppletConfig.apiKey || "AIzaSyB16Ic_RNzb8e5kyxQr2a6BWpeiFaSyIig",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseAppletConfig.authDomain || "buoyant-aggregator-kgmzr.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId || "buoyant-aggregator-kgmzr",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseAppletConfig.storageBucket || "buoyant-aggregator-kgmzr.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseAppletConfig.messagingSenderId || "931790837413",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseAppletConfig.appId || "1:931790837413:web:bcac9f783ae5a9bba09f4c"
 };
 
 // Initialize Firebase App singleton
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = firebaseAppletConfig.firestoreDatabaseId
+  ? getFirestore(app, firebaseAppletConfig.firestoreDatabaseId)
+  : getFirestore(app);
 
 // Google Auth Provider setup
 export const googleProvider = new GoogleAuthProvider();

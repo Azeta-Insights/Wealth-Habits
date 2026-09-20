@@ -1,6 +1,7 @@
 import React from 'react';
 import { Lightbulb, ReceiptText, PlusCircle, Settings, Sparkles, Lock } from 'lucide-react';
 import { UserProfile } from '../types';
+import { BrandLogo } from './BrandLogo';
 
 export type NavTab = 'insights' | 'transactions' | 'add' | 'settings';
 
@@ -26,18 +27,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-18">
           {/* Logo & Title */}
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => onSelectTab('insights')}>
-            <div className="w-10 h-10 rounded-xl bg-[#3D5A45] flex items-center justify-center text-white shadow-sm ring-1 ring-[#2B3E30]/20">
-              <Sparkles className="w-5 h-5 text-[#E4ECE4]" />
-            </div>
-            <div>
-              <h1 className="font-editorial text-xl sm:text-2xl font-bold tracking-tight text-[#233227] leading-tight">
-                Wealth Habits
-              </h1>
-              <p className="text-[11px] font-medium text-[#759A7E] tracking-wider uppercase">
-                Nigerian Finance Literacy
-              </p>
-            </div>
+          <div className="cursor-pointer group py-1" onClick={() => onSelectTab('insights')}>
+            <BrandLogo size="md" showText={true} />
           </div>
 
           {/* Desktop Navigation Tabs (inline when lg: screen) */}

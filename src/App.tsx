@@ -308,7 +308,11 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#242924]">
+    <div className="min-h-screen bg-gradient-to-b from-[#F9FAF7] via-[#FAF7F0] to-[#F4EFE6] flex flex-col text-[#1F2922] relative overflow-x-hidden">
+      {/* Soft Background Ambient Radiance */}
+      <div className="fixed -top-40 -right-40 w-96 h-96 rounded-full bg-[#10B981]/8 blur-3xl pointer-events-none" />
+      <div className="fixed top-1/3 -left-40 w-96 h-96 rounded-full bg-[#F59E0B]/6 blur-3xl pointer-events-none" />
+
       {/* Offline Status Alert Banner */}
       <OfflineIndicator />
 
@@ -323,7 +327,7 @@ export function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-20">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-20 relative z-10">
         {activeTab === 'insights' && (
           <InsightsView
             insights={insights}
@@ -365,14 +369,17 @@ export function App() {
         )}
       </main>
 
-      {/* Floating Action Button (FAB) for Quick Expense Logging */}
+      {/* Floating Action Button (FAB) with High Energy Gradient & Ripple */}
       {activeTab !== 'add' && !isLocked && (
         <button
           onClick={() => setActiveTab('add')}
           aria-label="Quick Add Transaction"
-          className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-[#3D5A45] hover:bg-[#2B3E30] text-white shadow-lg flex items-center justify-center transition-all hover:scale-105 active:scale-95 group focus:outline-none focus:ring-4 focus:ring-[#3D5A45]/30 border border-[#2B3E30]/20"
+          className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full text-white shadow-xl shadow-[#059669]/30 hover:shadow-2xl hover:shadow-[#059669]/40 flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 group focus:outline-none focus:ring-4 focus:ring-[#10B981]/30"
+          style={{
+            background: 'linear-gradient(135deg, #15803D 0%, #059669 60%, #047857 100%)'
+          }}
         >
-          <Plus className="w-6 h-6 transition-transform group-hover:rotate-90" />
+          <Plus className="w-6 h-6 transition-transform duration-200 group-hover:rotate-90" />
         </button>
       )}
 

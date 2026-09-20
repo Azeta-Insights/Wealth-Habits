@@ -76,18 +76,25 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
 
   return (
     <div className="space-y-6 pb-16 animate-fadeIn">
-      {/* Editorial Welcome Header */}
-      <div className="bg-gradient-to-br from-[#FAF7F2] via-[#F4EFE6] to-[#EAE3D5] rounded-3xl p-6 sm:p-8 lg:p-10 border border-[#E8E2D9] relative overflow-hidden shadow-sm">
+      {/* Editorial Welcome Header with High Energy & Warm Emerald Contrast */}
+      <div className="rounded-3xl p-6 sm:p-8 lg:p-10 border border-[#D5E6D8] relative overflow-hidden shadow-lg shadow-[#15803D]/5"
+           style={{
+             background: 'linear-gradient(135deg, #FAFDF9 0%, #F3F9F4 45%, #EAF5ED 100%)'
+           }}>
+        {/* Subtle Ambient Decorative Glows */}
+        <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-[#10B981]/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-10 left-1/4 w-80 h-80 rounded-full bg-[#F59E0B]/10 blur-3xl pointer-events-none" />
+
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 relative z-10">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#E4ECE4] text-[#344D3A] text-xs font-semibold mb-3">
-              <Sparkles className="w-3.5 h-3.5 text-[#3D5A45]" />
-              <span>Gentle Money Reflections</span>
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#D1FAE5] text-[#065F46] text-xs font-bold mb-3 border border-[#A7F3D0]/80">
+              <Sparkles className="w-3.5 h-3.5 text-[#059669]" />
+              <span>Nigerian Financial Mindfulness</span>
             </div>
-            <h2 className="font-editorial text-2xl sm:text-3xl lg:text-4xl font-bold text-[#233227] tracking-tight mb-2">
+            <h2 className="font-editorial text-2xl sm:text-3xl lg:text-4xl font-bold text-[#143D22] tracking-tight mb-2">
               Welcome{userProfile ? `, ${userProfile.givenName || userProfile.displayName}` : ''}
             </h2>
-            <p className="text-xs sm:text-sm lg:text-base text-[#4E564E] leading-relaxed">
+            <p className="text-xs sm:text-sm lg:text-base text-[#3A5040] leading-relaxed">
               Your spending rhythm decoded into calm, clear thoughts. Notice where your money flows without restrictive rules or judgment.
             </p>
           </div>
@@ -95,37 +102,37 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
           {allTransactions.length > 0 && (
             <button
               onClick={() => setShowSummaryCard(true)}
-              className="self-start px-4 py-2.5 rounded-2xl bg-white/90 hover:bg-white text-[#233227] border border-[#D5CBBF] shadow-xs text-xs font-semibold flex items-center gap-2 transition"
+              className="self-start px-4 py-2.5 rounded-2xl bg-white hover:bg-[#F0FDF4] text-[#143D22] border border-[#BBF7D0] shadow-sm text-xs font-bold flex items-center gap-2 transition active:scale-95"
             >
-              <Download className="w-4 h-4 text-[#3D5A45]" />
+              <Download className="w-4 h-4 text-[#059669]" />
               <span>Monthly Summary Card</span>
             </button>
           )}
         </div>
 
-        {/* Quick Summary Bar - Adapts from 2 cols on mobile to 4 cols on desktop */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 pt-6 border-t border-[#E2D9CA]/80">
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-[#E8E2D9]/80 shadow-xs">
-            <p className="text-[11px] font-semibold text-[#759A7E] uppercase tracking-wider">Total Outflows</p>
-            <p className="text-lg sm:text-2xl font-bold text-[#233227] mt-1">{formatNaira(totalSpent)}</p>
+        {/* Quick Summary Bar - High Contrast, Crisp Bento Metrics */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 pt-6 border-t border-[#D5E6D8]/80 relative z-10">
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 border border-[#E2EBDC] shadow-xs hover:border-[#10B981]/40 transition-all">
+            <p className="text-[11px] font-bold text-[#059669] uppercase tracking-wider">Total Outflows</p>
+            <p className="text-lg sm:text-2xl font-bold text-[#143D22] mt-1">{formatNaira(totalSpent)}</p>
           </div>
 
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-[#E8E2D9]/80 shadow-xs">
-            <p className="text-[11px] font-semibold text-[#759A7E] uppercase tracking-wider">Total Inflows</p>
-            <p className="text-lg sm:text-2xl font-bold text-[#20603D] mt-1">{formatNaira(totalInflow)}</p>
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 border border-[#E2EBDC] shadow-xs hover:border-[#10B981]/40 transition-all">
+            <p className="text-[11px] font-bold text-[#047857] uppercase tracking-wider">Total Inflows</p>
+            <p className="text-lg sm:text-2xl font-bold text-[#047857] mt-1">{formatNaira(totalInflow)}</p>
           </div>
 
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-[#E8E2D9]/80 shadow-xs">
-            <p className="text-[11px] font-semibold text-[#759A7E] uppercase tracking-wider">Needs Logged</p>
-            <p className="text-lg sm:text-2xl font-bold text-[#20603D] mt-1">
-              {needsCount} <span className="text-xs font-normal text-[#636C62]">({needsPercent}%)</span>
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 border border-[#BBF7D0]/60 shadow-xs hover:border-[#10B981]/40 transition-all">
+            <p className="text-[11px] font-bold text-[#059669] uppercase tracking-wider">Needs Logged</p>
+            <p className="text-lg sm:text-2xl font-bold text-[#047857] mt-1">
+              {needsCount} <span className="text-xs font-semibold text-[#4B6B52]">({needsPercent}%)</span>
             </p>
           </div>
 
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-[#E8E2D9]/80 shadow-xs">
-            <p className="text-[11px] font-semibold text-[#759A7E] uppercase tracking-wider">Wants Logged</p>
-            <p className="text-lg sm:text-2xl font-bold text-[#B25E1A] mt-1">
-              {wantsCount} <span className="text-xs font-normal text-[#636C62]">({wantsPercent}%)</span>
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 border border-[#FDE68A]/60 shadow-xs hover:border-[#F59E0B]/40 transition-all">
+            <p className="text-[11px] font-bold text-[#D97706] uppercase tracking-wider">Wants Logged</p>
+            <p className="text-lg sm:text-2xl font-bold text-[#B45309] mt-1">
+              {wantsCount} <span className="text-xs font-semibold text-[#92400E]">({wantsPercent}%)</span>
             </p>
           </div>
         </div>
