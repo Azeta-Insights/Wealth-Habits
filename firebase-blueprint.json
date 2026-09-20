@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "User profile with personal display preferences and account metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique user UID from Firebase Auth" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "photoUrl": { "type": "string", "description": "User avatar URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" },
+        "lastLogin": { "type": "string", "format": "date-time", "description": "Last sign in timestamp" }
+      },
+      "required": ["id", "displayName", "email"]
+    },
+    "transaction": {
+      "title": "Transaction",
+      "description": "Financial transaction logged manually or extracted from Nigerian bank SMS / statement",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique transaction ID" },
+        "userId": { "type": "string", "description": "Owner user UID" },
+        "amount": { "type": "number", "description": "Transaction amount in Naira" },
+        "type": { "type": "string", "enum": ["DEBIT", "CREDIT"], "description": "Transaction direction" },
+        "category": { "type": "string", "description": "Assigned spending category" },
+        "narration": { "type": "string", "description": "Description or bank narration" },
+        "bankName": { "type": "string", "description": "Nigerian issuing bank name" },
+        "source": { "type": "string", "enum": ["MANUAL", "SMS", "STATEMENT"], "description": "Source origin of transaction" },
+        "timestamp": { "type": "number", "description": "Transaction timestamp in epoch ms" },
+        "reflection": { "type": "string", "enum": ["NEED", "WANT"], "description": "Mindfulness reflection classification" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["id", "userId", "amount", "type", "category", "narration", "source", "timestamp"]
+    },
+    "reflection": {
+      "title": "Reflection",
+      "description": "User response to reflective spending prompts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique reflection key or insight ID" },
+        "userId": { "type": "string", "description": "Owner user UID" },
+        "reflection": { "type": "string", "enum": ["NEED", "WANT"], "description": "Mindfulness reflection value" },
+        "updatedAt": { "type": "number", "description": "Timestamp of reflection update" }
+      },
+      "required": ["id", "userId", "reflection", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "entity": "user",
+      "description": "User profile document"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "entity": "transaction",
+      "description": "Private transactions subcollection belonging to the user"
+    },
+    "/users/{userId}/reflections/{reflectionId}": {
+      "entity": "reflection",
+      "description": "Private reflections subcollection belonging to the user"
+    }
+  }
+}

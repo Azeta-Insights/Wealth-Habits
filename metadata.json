@@ -1,7 +1,8 @@
 {
   "name": "Wealth Habits",
-  "description": "Personal finance literacy app for Nigerian users with native Android SMS alerts, bank statement parser, and Gemini-powered reflective insights.",
+  "description": "Personal finance literacy app turning Nigerian bank alerts and transactions into warm, plain-language insights.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
-
