@@ -225,7 +225,7 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
           }`}
         >
           <Sparkles className={`w-4 h-4 ${activeSubTab === 'paste' ? 'text-[#059669]' : 'text-[#659775]'}`} />
-          <span>Paste Bank Alert</span>
+          <span>Paste SMS Alert</span>
         </button>
 
         <button
@@ -237,7 +237,7 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
           }`}
         >
           <FileText className={`w-4 h-4 ${activeSubTab === 'statement' ? 'text-[#059669]' : 'text-[#659775]'}`} />
-          <span>PDF / CSV Statement</span>
+          <span>Upload Statement</span>
         </button>
 
         <button
@@ -249,7 +249,7 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
           }`}
         >
           <PlusCircle className={`w-4 h-4 ${activeSubTab === 'manual' ? 'text-[#059669]' : 'text-[#659775]'}`} />
-          <span>Manual Entry</span>
+          <span>Type Expense</span>
         </button>
       </div>
 
@@ -327,10 +327,10 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-editorial text-base font-bold text-[#233227]">
-                      Parsed Alerts Preview
+                      Detected Transactions
                     </h4>
                     <p className="text-xs text-[#759A7E]">
-                      {parsedPreview.length} transaction{parsedPreview.length > 1 ? 's' : ''} detected
+                      {parsedPreview.length} item{parsedPreview.length > 1 ? 's' : ''} found
                     </p>
                   </div>
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#E4ECE4] text-[#20603D]">

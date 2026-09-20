@@ -47,7 +47,7 @@ export const StatementReviewModal: React.FC<StatementReviewModalProps> = ({
             </div>
             <div>
               <h3 className="font-editorial text-xl font-bold text-[#233227]">
-                Review Statement Import
+                Review Statement Expenses
               </h3>
               <p className="text-xs text-[#759A7E]">
                 {result.fileName} • {result.bankName}
@@ -153,7 +153,7 @@ export const StatementReviewModal: React.FC<StatementReviewModalProps> = ({
             className="px-5 py-2.5 rounded-xl bg-[#3D5A45] hover:bg-[#344D3A] text-white text-xs font-semibold flex items-center space-x-2 shadow-sm disabled:opacity-50"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>Confirm Import ({items.length})</span>
+            <span>Save to Journal ({items.length})</span>
           </button>
         </div>
       </div>

@@ -66,7 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <PlusCircle className={`w-4 h-4 ${activeTab === 'add' ? 'text-[#3D5A45]' : 'text-[#8A9588]'}`} />
-              <span>Add / Import</span>
+              <span>Add Expense</span>
             </button>
 
             <button
@@ -155,7 +155,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <PlusCircle className={`w-4 h-4 ${activeTab === 'add' ? 'text-[#3D5A45]' : 'text-[#8A9588]'}`} />
-            <span>Add / Import</span>
+            <span>Add</span>
           </button>
 
           <button
