@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { StatementParseResult } from '../types';
+import { matchCategoryFromNarration } from './smsParser';
 
 export async function parseStatementWithAiOcr(
   file: File,
@@ -29,7 +30,7 @@ export async function parseStatementWithAiOcr(
   onProgress?.('Analyzing transactions with Gemini AI OCR...');
 
   const prompt = `
-  You are an expert financial document parser for Nigerian bank statements (GTBank, Access, Zenith, Kuda, OPay, Moniepoint, UBA, First Bank, etc.).
+  You are an expert financial document parser for Nigerian bank statements (GTBank, Access, Zenith, Kuda, OPay, Moniepoint, UBA, First Bank, Stanbic, Fidelity, etc.).
   Analyze this bank statement document image or PDF pages and extract all individual transactions.
   
   CRITICAL RULE FOR OPAY STATEMENTS:
@@ -93,7 +94,7 @@ export async function parseStatementWithAiOcr(
     const parsed = JSON.parse(textResponse);
     let rawTxs = parsed.transactions || [];
 
-    // Filter out any lingering OPay OWealth internal withdrawal echoes in code as a safeguard
+    // Filter out OPay internal OWealth withdrawal echoes
     rawTxs = rawTxs.filter((t: any) => {
       const n = (t.narration || '').toLowerCase();
       if (n.includes('owealth withdrawal') || n === '(transaction payment)' || n.includes('auto-save to owealth')) {
@@ -112,12 +113,16 @@ export async function parseStatementWithAiOcr(
       else totalDebits += amount;
 
       const timestamp = Date.parse(t.date) || Date.now() - idx * 1000;
+      const cleanNarration = t.narration || 'Bank Statement Item';
+
+      // Pass through Nigerian category engine & smart merchant memory rules
+      const category = matchCategoryFromNarration(cleanNarration);
 
       return {
         amount,
         type,
-        category: 'OTHER' as const,
-        narration: t.narration || 'Bank Statement Item',
+        category,
+        narration: cleanNarration,
         bankName: t.bankName || parsed.bankName || 'OPay Statement',
         source: 'STATEMENT' as const,
         timestamp,
