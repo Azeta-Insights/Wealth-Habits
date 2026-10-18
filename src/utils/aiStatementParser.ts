@@ -29,10 +29,15 @@ export async function parseStatementWithAiOcr(
   onProgress?.('Analyzing transactions with Gemini AI OCR...');
 
   const prompt = `
-  You are an expert financial document parser for Nigerian bank statements (GTBank, Access, Zenith, Kuda, OPay, Moniepoint, UBA, First Bank, Stanbic, Fidelity, etc.).
-  Analyze this bank statement document image or PDF page and extract all individual transactions.
+  You are an expert financial document parser for Nigerian bank statements (GTBank, Access, Zenith, Kuda, OPay, Moniepoint, UBA, First Bank, etc.).
+  Analyze this bank statement document image or PDF pages and extract all individual transactions.
   
-  For each transaction, extract:
+  CRITICAL RULE FOR OPAY STATEMENTS:
+  OPay statements list internal ledger legs like "OWealth Withdrawal (Transaction Payment)", "(Transaction Payment)", and internal "Auto-save to OWealth Balance" alongside actual spends. 
+  - IGNORE and EXCLUDE any row whose sole description is "OWealth Withdrawal (Transaction Payment)" or "(Transaction Payment)" because they are internal funding echoes of the actual transfer/card payment.
+  - Only extract the primary transaction rows (e.g., transfers to merchants/people, card payments, POS purchases, actual deposits, and bank charges like Stamp Duty).
+
+  For each valid transaction, extract:
   - date: ISO string or standard format date (YYYY-MM-DD or DD/MM/YYYY)
   - narration: The transaction description or merchant name (clean up reference numbers and bank boilerplate like NIP/, POS PUR, etc.)
   - amount: The numerical amount as a positive number
@@ -86,7 +91,16 @@ export async function parseStatementWithAiOcr(
     }
 
     const parsed = JSON.parse(textResponse);
-    const rawTxs = parsed.transactions || [];
+    let rawTxs = parsed.transactions || [];
+
+    // Filter out any lingering OPay OWealth internal withdrawal echoes in code as a safeguard
+    rawTxs = rawTxs.filter((t: any) => {
+      const n = (t.narration || '').toLowerCase();
+      if (n.includes('owealth withdrawal') || n === '(transaction payment)' || n.includes('auto-save to owealth')) {
+        return false;
+      }
+      return true;
+    });
 
     let totalCredits = 0;
     let totalDebits = 0;
@@ -104,7 +118,7 @@ export async function parseStatementWithAiOcr(
         type,
         category: 'OTHER' as const,
         narration: t.narration || 'Bank Statement Item',
-        bankName: t.bankName || parsed.bankName || 'Bank Statement',
+        bankName: t.bankName || parsed.bankName || 'OPay Statement',
         source: 'STATEMENT' as const,
         timestamp,
         reflection: null
@@ -112,7 +126,7 @@ export async function parseStatementWithAiOcr(
     });
 
     return {
-      bankName: parsed.bankName || 'Bank Statement',
+      bankName: parsed.bankName || 'OPay Statement',
       fileName: file.name,
       transactions,
       totalCredits,
