@@ -27,24 +27,20 @@ import {
 } from 'firebase/firestore';
 import { TransactionEntity, ReflectionType, UserProfile } from '../types';
 
-import firebaseAppletConfig from '../../firebase-applet-config.json';
-
-// Firebase client configuration loaded safely
+// Firebase client configuration loaded securely from Vite environment variables
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseAppletConfig.apiKey || "AIzaSyB16Ic_RNzb8e5kyxQr2a6BWpeiFaSyIig",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseAppletConfig.authDomain || "buoyant-aggregator-kgmzr.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId || "buoyant-aggregator-kgmzr",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseAppletConfig.storageBucket || "buoyant-aggregator-kgmzr.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseAppletConfig.messagingSenderId || "931790837413",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseAppletConfig.appId || "1:931790837413:web:bcac9f783ae5a9bba09f4c"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // Initialize Firebase App singleton
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
-export const db = firebaseAppletConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseAppletConfig.firestoreDatabaseId)
-  : getFirestore(app);
+export const db = getFirestore(app);
 
 // Google Auth Provider setup
 export const googleProvider = new GoogleAuthProvider();
@@ -112,7 +108,6 @@ export async function signInWithGoogle(): Promise<User> {
     return result.user;
   } catch (err: unknown) {
     const error = err as { code?: string; message?: string };
-    // If popups are blocked in the iframe or mobile browser, try redirect
     if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
       try {
         await signInWithRedirect(auth, googleProvider);
@@ -311,8 +306,7 @@ export function subscribeToUserTransactions(
       items.sort((a, b) => b.timestamp - a.timestamp);
       onUpdate(items);
     },
-    (error) => {
-      // Fallback without orderBy index if composite index is pending
+    (_error) => {
       const fallbackQ = query(txCollection, limit(maxLimit));
       return onSnapshot(fallbackQ, (snapshot) => {
         const items: TransactionEntity[] = [];
