@@ -1,87 +1,125 @@
+import { GoogleGenAI, Type } from '@google/genai';
 import { StatementParseResult } from '../types';
-import { matchCategoryFromNarration } from './smsParser';
 
-export interface AiParseProgressCallback {
-  (statusText: string): void;
-}
+export async function parseStatementWithAiOcr(
+  file: File,
+  onProgress?: (status: string) => void
+): Promise<StatementParseResult> {
+  onProgress?.('Preparing document for AI analysis...');
 
-/**
- * Converts a File or Blob to a base64 string (without the data URL prefix)
- */
-function fileToBase64(file: File | Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('Gemini API key is missing. Please add VITE_GEMINI_API_KEY in your Vercel environment variables.');
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  // Convert file to base64
+  const base64Data = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
-      // Strip data:*/*;base64, prefix
       const base64 = result.includes(',') ? result.split(',')[1] : result;
       resolve(base64);
     };
     reader.onerror = (error) => reject(error);
     reader.readAsDataURL(file);
   });
-}
 
-/**
- * Sends a statement file (PDF, PNG, JPG, WEBP) to the server-side AI OCR and document extraction engine.
- */
-export async function parseStatementWithAiOcr(
-  file: File,
-  onProgress?: AiParseProgressCallback
-): Promise<StatementParseResult> {
-  if (onProgress) {
-    onProgress('Preparing document for AI OCR scan...');
-  }
+  onProgress?.('Analyzing transactions with Gemini AI OCR...');
 
-  const base64Data = await fileToBase64(file);
-  const mimeType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+  const prompt = `
+  You are an expert financial document parser for Nigerian bank statements (GTBank, Access, Zenith, Kuda, OPay, Moniepoint, UBA, First Bank, etc.).
+  Analyze this bank statement document image or PDF page and extract all individual transactions.
+  
+  For each transaction, extract:
+  - date: ISO string or standard format date
+  - narration: The transaction description or merchant name (clean up reference numbers and bank boilerplate)
+  - amount: The numerical amount as a positive number
+  - type: 'DEBIT' (money out / withdrawal / purchase / fee) or 'CREDIT' (money in / deposit / inflow)
+  - bankName: The name of the bank if identifiable from the header or text
+  
+  Ignore opening balances, closing balances, and page header/footer metadata. Return the data strictly matching the requested JSON schema.
+  `;
 
-  if (onProgress) {
-    onProgress('AI OCR is reading transactions and table columns...');
-  }
-
-  const response = await fetch('/api/parse-statement', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      fileBase64: base64Data,
-      mimeType,
-      fileName: file.name
-    })
-  });
-
-  if (!response.ok) {
-    let errorMsg = 'Failed to analyze document with AI OCR engine.';
-    try {
-      const errJson = await response.json();
-      if (errJson.error) {
-        errorMsg = errJson.error;
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          inlineData: {
+            mimeType: file.type || 'application/pdf',
+            data: base64Data
+          }
+        },
+        { text: prompt }
+      ],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            bankName: { type: Type.STRING },
+            transactions: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  date: { type: Type.STRING },
+                  narration: { type: Type.STRING },
+                  amount: { type: Type.NUMBER },
+                  type: { type: Type.STRING, enum: ['DEBIT', 'CREDIT'] },
+                  bankName: { type: Type.STRING }
+                },
+                required: ['date', 'narration', 'amount', 'type']
+              }
+            }
+          },
+          required: ['bankName', 'transactions']
+        }
       }
-    } catch {
-      // ignore
+    });
+
+    const textResponse = response.text;
+    if (!textResponse) {
+      throw new Error('No response received from Gemini AI OCR.');
     }
-    throw new Error(errorMsg);
-  }
 
-  const data = await response.json();
-  if (!data.success || !data.result) {
-    throw new Error(data.error || 'No transaction data could be extracted.');
-  }
+    const parsed = JSON.parse(textResponse);
+    const rawTxs = parsed.transactions || [];
 
-  const rawResult = data.result as StatementParseResult;
-  // Apply priority matching (learned rules, custom categories, expanded keywords) to extracted transactions
-  const refinedTransactions = (rawResult.transactions || []).map((t) => {
-    const matched = matchCategoryFromNarration(t.narration);
+    let totalCredits = 0;
+    let totalDebits = 0;
+
+    const transactions = rawTxs.map((t: any, idx: number) => {
+      const amount = Number(t.amount) || 0;
+      const type = (t.type === 'CREDIT' ? 'CREDIT' : 'DEBIT') as 'CREDIT' | 'DEBIT';
+      if (type === 'CREDIT') totalCredits += amount;
+      else totalDebits += amount;
+
+      const timestamp = Date.parse(t.date) || Date.now() - idx * 1000;
+
+      return {
+        amount,
+        type,
+        category: 'OTHER' as const,
+        narration: t.narration || 'Bank Statement Item',
+        bankName: t.bankName || parsed.bankName || 'Bank Statement',
+        source: 'STATEMENT' as const,
+        timestamp,
+        reflection: null
+      };
+    });
+
     return {
-      ...t,
-      category: matched !== 'OTHER' ? matched : (t.category || 'OTHER')
+      bankName: parsed.bankName || 'Bank Statement',
+      fileName: file.name,
+      transactions,
+      totalCredits,
+      totalDebits
     };
-  });
-
-  return {
-    ...rawResult,
-    transactions: refinedTransactions
-  };
+  } catch (error: any) {
+    console.error('Gemini AI OCR error:', error);
+    throw new Error(error?.message || 'Failed to analyze document with AI OCR engine.');
+  }
 }
