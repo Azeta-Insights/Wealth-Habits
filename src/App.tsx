@@ -36,7 +36,9 @@ import {
   isSessionLocked,
   lockSession
 } from './utils/cryptoStorage';
+import { initDailyReminderCheck } from './utils/reminders';
 import { generateInsights } from './utils/insightEngine';
+import { learnCategoryRule } from './utils/categoryRules';
 import {
   auth,
   onAuthUserChanged,
@@ -113,6 +115,14 @@ export function App() {
     });
     return () => unsubscribe();
   }, [userProfile?.id]);
+
+  // Gentle Evening Cash & POS Check-In Reminders
+  useEffect(() => {
+    const cleanup = initDailyReminderCheck(() => {
+      setActiveTab('add');
+    });
+    return cleanup;
+  }, []);
 
   // Handle Unlocked callback from PinLockModal
   const handleSessionUnlocked = () => {
@@ -192,8 +202,13 @@ export function App() {
     updateTransactions(updatedTxs);
 
     const target = updatedTxs.find((t) => t.id === transactionId);
-    if (target && auth.currentUser) {
-      saveTransactionToFirestore(auth.currentUser.uid, target);
+    if (target) {
+      if (target.narration && target.narration.trim().length >= 3) {
+        learnCategoryRule(target.narration, category);
+      }
+      if (auth.currentUser) {
+        saveTransactionToFirestore(auth.currentUser.uid, target);
+      }
     }
   };
 

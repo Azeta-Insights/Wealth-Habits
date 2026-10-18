@@ -17,6 +17,7 @@ import {
 import { CategoryKey, ReflectionType, TRANSACTION_CATEGORIES, TransactionEntity } from '../types';
 import { formatNaira } from '../utils/insightEngine';
 import { learnCategoryRule } from '../utils/categoryRules';
+import { getCustomCategories, getCategoryDisplay } from '../utils/customCategories';
 
 interface TransactionsViewProps {
   transactions: TransactionEntity[];
@@ -345,6 +346,21 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
               <span>{cat.displayName}</span>
             </button>
           ))}
+
+          {getCustomCategories().map((cat) => (
+            <button
+              key={cat.key}
+              onClick={() => setSelectedCategory(cat.key)}
+              className={`px-3 py-1.5 rounded-full font-medium whitespace-nowrap flex items-center space-x-1 transition-all border ${
+                selectedCategory === cat.key
+                  ? 'bg-[#3D5A45] text-white border-[#3D5A45]'
+                  : 'bg-[#FAF7F2] text-[#636C62] border-[#E8E2D9] hover:bg-[#EFE9DE]'
+              }`}
+            >
+              <span>{cat.emoji}</span>
+              <span>{cat.displayName}</span>
+            </button>
+          ))}
         </div>
 
         {/* Reflection Tag Filters */}
@@ -425,13 +441,15 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
           </div>
         ) : (
           paginatedTransactions.map((tx) => {
-            const categoryInfo = TRANSACTION_CATEGORIES[tx.category] || TRANSACTION_CATEGORIES.OTHER;
+            const categoryInfo = getCategoryDisplay(tx.category);
             const dateStr = new Date(tx.timestamp).toLocaleDateString('en-GB', {
               day: 'numeric',
               month: 'short',
               hour: '2-digit',
               minute: '2-digit'
             });
+
+            const customCategories = getCustomCategories();
 
             return (
               <div
@@ -467,18 +485,29 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                           onChange={(e) => {
                             const newCat = e.target.value as CategoryKey;
                             onUpdateCategory(tx.id, newCat);
-                            if (tx.narration && tx.narration.length >= 3) {
+                            if (tx.narration && tx.narration.trim().length >= 3) {
                               learnCategoryRule(tx.narration, newCat);
                             }
                             setEditingCategoryId(null);
                           }}
                           className="text-[11px] font-semibold bg-white border border-[#3D5A45] rounded px-1 py-0.5 text-[#233227] focus:outline-none"
                         >
-                          {Object.entries(TRANSACTION_CATEGORIES).map(([key, cat]) => (
-                            <option key={key} value={key}>
-                              {cat.emoji} {cat.displayName}
-                            </option>
-                          ))}
+                          <optgroup label="Standard Categories">
+                            {Object.entries(TRANSACTION_CATEGORIES).map(([key, cat]) => (
+                              <option key={key} value={key}>
+                                {cat.emoji} {cat.displayName}
+                              </option>
+                            ))}
+                          </optgroup>
+                          {customCategories.length > 0 && (
+                            <optgroup label="Custom Categories">
+                              {customCategories.map((cat) => (
+                                <option key={cat.key} value={cat.key}>
+                                  {cat.emoji} {cat.displayName}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
                         </select>
                       ) : (
                         <button

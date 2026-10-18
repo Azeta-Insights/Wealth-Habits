@@ -94,9 +94,16 @@ export function parseStatementCsv(
         amount = Math.abs(rawAmt);
         if (colType !== -1 && cols[colType]) {
           const t = cols[colType].toLowerCase();
-          type = t.includes('cr') || t.includes('credit') ? 'CREDIT' : 'DEBIT';
+          type = t.includes('cr') || t.includes('credit') || t.includes('dep') || t.includes('inward') ? 'CREDIT' : 'DEBIT';
         } else {
-          type = rawAmt < 0 ? 'DEBIT' : 'DEBIT';
+          // If raw amount is negative, it's a debit; if positive, check narration for credit indicators
+          if (rawAmt < 0) {
+            type = 'DEBIT';
+          } else {
+            const lowerNarr = narration.toLowerCase();
+            const hasCreditSign = lowerNarr.includes('credit') || lowerNarr.includes('cr:') || lowerNarr.includes('trf from') || lowerNarr.includes('transfer from') || lowerNarr.includes('deposit') || lowerNarr.includes('salary');
+            type = hasCreditSign ? 'CREDIT' : 'DEBIT';
+          }
         }
       }
     } else {
@@ -112,9 +119,30 @@ export function parseStatementCsv(
 
     // Parse date if possible
     if (colDate !== -1 && cols[colDate]) {
-      const parsedDate = Date.parse(cols[colDate]);
+      const rawDate = cols[colDate].trim();
+      const parsedDate = Date.parse(rawDate);
       if (!isNaN(parsedDate) && parsedDate > 0) {
         timestamp = parsedDate;
+      } else {
+        // Try Nigerian formats: DD/MM/YYYY, DD-MM-YYYY, DD-MMM-YYYY
+        const parts = rawDate.split(/[\/\-\.\s]/).filter(Boolean);
+        if (parts.length >= 3) {
+          const day = parseInt(parts[0], 10);
+          let month = 0;
+          if (isNaN(Number(parts[1]))) {
+            const mNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+            const mIdx = mNames.indexOf(parts[1].toLowerCase().substring(0, 3));
+            month = mIdx !== -1 ? mIdx : 0;
+          } else {
+            month = parseInt(parts[1], 10) - 1;
+          }
+          let year = parseInt(parts[2], 10);
+          if (year < 100) year += 2000;
+          const dt = new Date(year, month, day);
+          if (!isNaN(dt.getTime())) {
+            timestamp = dt.getTime();
+          }
+        }
       }
     }
 

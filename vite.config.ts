@@ -42,6 +42,7 @@ export default defineConfig({
         ]
       },
       workbox: {
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         runtimeCaching: [
           {
@@ -82,7 +83,19 @@ export default defineConfig({
   ],
   server: {
     host: '0.0.0.0',
-    port: 3000
+    port: 3000,
+    hmr: false
+  },
+  build: {
+    chunkSizeWarningLimit: 3000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'pdf-vendor': ['pdfjs-dist'],
+          'excel-vendor': ['xlsx']
+        }
+      }
+    }
   },
   optimizeDeps: {
     include: ['pdfjs-dist']

@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
-import { Lock, ShieldCheck, KeyRound, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { unlockSessionWithPin } from '../utils/cryptoStorage';
+import React, { useState, useEffect, useRef } from 'react';
+import { Lock, ShieldCheck, KeyRound, AlertCircle, Eye, EyeOff, Fingerprint } from 'lucide-react';
+import {
+  unlockSessionWithPin,
+  isBiometricEnabled,
+  isBiometricSupported,
+  authenticateBiometric
+} from '../utils/cryptoStorage';
 
 interface PinLockModalProps {
   isOpen: boolean;
@@ -12,6 +17,46 @@ export const PinLockModal: React.FC<PinLockModalProps> = ({ isOpen, onUnlocked }
   const [error, setError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [showDigits, setShowDigits] = useState(false);
+  const [hasBiometric, setHasBiometric] = useState(false);
+  const hasAutoPromptedRef = useRef(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isOpen) {
+      if (isBiometricEnabled()) {
+        isBiometricSupported().then((supported) => {
+          if (isMounted && supported) {
+            setHasBiometric(true);
+            // Prompt biometric once on modal appearance
+            if (!hasAutoPromptedRef.current) {
+              hasAutoPromptedRef.current = true;
+              triggerBiometric();
+            }
+          }
+        });
+      }
+    } else {
+      hasAutoPromptedRef.current = false;
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
+  const triggerBiometric = async () => {
+    setIsVerifying(true);
+    setError(null);
+    try {
+      const verified = await authenticateBiometric();
+      if (verified) {
+        onUnlocked();
+      }
+    } catch {
+      // User cancelled or failed biometric prompt - smoothly fall back to PIN
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -131,6 +176,21 @@ export const PinLockModal: React.FC<PinLockModalProps> = ({ isOpen, onUnlocked }
             </div>
           )}
         </form>
+
+        {/* Biometric 1-Tap Unlock Button */}
+        {hasBiometric && (
+          <div className="pt-0">
+            <button
+              type="button"
+              onClick={triggerBiometric}
+              disabled={isVerifying}
+              className="w-full max-w-[240px] mx-auto py-2.5 px-4 rounded-2xl bg-[#3D5A45] hover:bg-[#324B39] text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition active:scale-98 cursor-pointer"
+            >
+              <Fingerprint className="w-4 h-4 text-[#C1DEC9]" />
+              <span>Unlock with Fingerprint / FaceID</span>
+            </button>
+          </div>
+        )}
 
         {/* Numeric Keypad for fast tap */}
         <div className="grid grid-cols-3 gap-2 max-w-[240px] mx-auto pt-1">

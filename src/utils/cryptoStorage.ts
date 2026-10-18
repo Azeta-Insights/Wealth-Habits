@@ -4,6 +4,9 @@
  */
 
 const PIN_LOCK_CONFIG_KEY = 'wealth_habits_pin_config';
+const BIOMETRIC_ENABLED_KEY = 'wealth_habits_biometric_enabled';
+const BIOMETRIC_CRED_ID_KEY = 'wealth_habits_biometric_cred_id';
+const BIOMETRIC_VAULT_KEY = 'wealth_habits_bio_vault_key';
 const ENCRYPTED_PREFIX = '__WH_ENC__:';
 
 export interface PinConfig {
@@ -31,6 +34,31 @@ function hexToBuffer(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
     bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+function bufferToBase64Url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+function base64UrlToBuffer(base64url: string): Uint8Array {
+  let base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4) {
+    base64 += '=';
+  }
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
   }
   return bytes;
 }
@@ -91,7 +119,7 @@ async function deriveKeyFromPin(pin: string, salt: Uint8Array): Promise<CryptoKe
     },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
-    false,
+    true,
     ['encrypt', 'decrypt']
   );
 }
@@ -188,6 +216,14 @@ export async function unlockSessionWithPin(pin: string): Promise<{ success: bool
     if (testResult === 'WEALTH_HABITS_PIN_VERIFY_TOKEN') {
       sessionCryptoKey = key;
       isSessionActive = true;
+      if (isBiometricEnabled()) {
+        try {
+          const rawKeyBuffer = await window.crypto.subtle.exportKey('raw', key);
+          localStorage.setItem(BIOMETRIC_VAULT_KEY, bufferToHex(rawKeyBuffer));
+        } catch {
+          // ignore
+        }
+      }
       return { success: true };
     }
     return { success: false, error: 'Incorrect PIN. Please try again.' };
@@ -232,6 +268,7 @@ export async function disablePinLock(currentPin?: string): Promise<{ success: bo
   try {
     await decryptAllStoredData();
     localStorage.removeItem(PIN_LOCK_CONFIG_KEY);
+    disableBiometricUnlock();
     sessionCryptoKey = null;
     isSessionActive = false;
     return { success: true };
@@ -287,4 +324,165 @@ export function getStoredItemSynchronous(key: string): string | null {
     return null; // Signals asynchronous retrieval needed or unlocked state
   }
   return raw;
+}
+
+/**
+ * Check if the current browser/device supports WebAuthn platform biometrics (FaceID/Fingerprint)
+ */
+export async function isBiometricSupported(): Promise<boolean> {
+  try {
+    if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+      return false;
+    }
+    if (typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable !== 'function') {
+      return false;
+    }
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if biometric unlock is enabled by the user
+ */
+export function isBiometricEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    localStorage.getItem(BIOMETRIC_ENABLED_KEY) === 'true' &&
+    !!localStorage.getItem(BIOMETRIC_CRED_ID_KEY) &&
+    isPinLockConfigured()
+  );
+}
+
+/**
+ * Register biometric platform authenticator credential
+ */
+export async function registerBiometricUnlock(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supported = await isBiometricSupported();
+    if (!supported) {
+      return { success: false, error: 'Biometric authentication is not supported or available on this device.' };
+    }
+    if (!isPinLockConfigured()) {
+      return { success: false, error: 'Please set up a passcode lock before enabling biometric unlock.' };
+    }
+
+    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
+    const userId = window.crypto.getRandomValues(new Uint8Array(16));
+
+    const credential = (await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: { name: 'Wealth Habits' },
+        user: {
+          id: userId,
+          name: 'user@wealthhabits.local',
+          displayName: 'Wealth Habits Journal'
+        },
+        pubKeyCredParams: [
+          { type: 'public-key', alg: -7 },   // ES256
+          { type: 'public-key', alg: -257 }  // RS256
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: 'platform',
+          userVerification: 'required'
+        },
+        timeout: 60000,
+        attestation: 'none'
+      }
+    })) as PublicKeyCredential | null;
+
+    if (!credential) {
+      return { success: false, error: 'Biometric registration was cancelled.' };
+    }
+
+    const credIdBase64 = bufferToBase64Url(credential.rawId);
+    localStorage.setItem(BIOMETRIC_CRED_ID_KEY, credIdBase64);
+    localStorage.setItem(BIOMETRIC_ENABLED_KEY, 'true');
+
+    // If active session key exists in memory, export and cache it in the biometric vault
+    if (sessionCryptoKey) {
+      try {
+        const rawKeyBuffer = await window.crypto.subtle.exportKey('raw', sessionCryptoKey);
+        localStorage.setItem(BIOMETRIC_VAULT_KEY, bufferToHex(rawKeyBuffer));
+      } catch (err) {
+        console.warn('Could not cache session key in biometric vault', err);
+      }
+    }
+
+    return { success: true };
+  } catch (err: unknown) {
+    console.error('Biometric registration error:', err);
+    const msg = err instanceof Error ? err.message : 'Biometric setup failed or was cancelled.';
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Unlock active session using verified biometric state
+ */
+export async function unlockSessionWithBiometrics(): Promise<void> {
+  isSessionActive = true;
+  const storedRawHex = localStorage.getItem(BIOMETRIC_VAULT_KEY);
+  if (storedRawHex && isWebCryptoAvailable()) {
+    try {
+      const rawBytes = hexToBuffer(storedRawHex);
+      sessionCryptoKey = await window.crypto.subtle.importKey(
+        'raw',
+        rawBytes,
+        { name: 'AES-GCM' },
+        true,
+        ['encrypt', 'decrypt']
+      );
+    } catch (err) {
+      console.warn('Could not restore session key from bio vault', err);
+    }
+  }
+}
+
+/**
+ * Authenticate using platform biometric (FaceID / TouchID / Fingerprint)
+ */
+export async function authenticateBiometric(): Promise<boolean> {
+  try {
+    if (!isBiometricEnabled()) return false;
+    const credIdBase64 = localStorage.getItem(BIOMETRIC_CRED_ID_KEY);
+    if (!credIdBase64) return false;
+
+    const credIdBytes = base64UrlToBuffer(credIdBase64);
+    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
+
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        allowCredentials: [
+          {
+            id: credIdBytes as unknown as BufferSource,
+            type: 'public-key'
+          }
+        ],
+        userVerification: 'required',
+        timeout: 60000
+      }
+    });
+
+    if (assertion) {
+      await unlockSessionWithBiometrics();
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.warn('Biometric authentication failed or cancelled', err);
+    return false;
+  }
+}
+
+/**
+ * Disable biometric unlock and clear stored biometric credential keys
+ */
+export function disableBiometricUnlock(): void {
+  localStorage.removeItem(BIOMETRIC_ENABLED_KEY);
+  localStorage.removeItem(BIOMETRIC_CRED_ID_KEY);
+  localStorage.removeItem(BIOMETRIC_VAULT_KEY);
 }

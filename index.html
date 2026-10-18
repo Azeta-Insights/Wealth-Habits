@@ -18,6 +18,29 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // Suppress Vite HMR WebSocket connection closed errors in sandbox iframe environment
+      const _origConsoleError = console.error;
+      console.error = function(...args) {
+        const str = args.map(a => (a && a.message) || String(a)).join(' ');
+        if (str.includes('WebSocket') && (str.includes('[vite]') || str.includes('closed without opened'))) {
+          return;
+        }
+        _origConsoleError.apply(console, args);
+      };
+      window.addEventListener('error', function(e) {
+        if (e && (e.message?.includes('WebSocket') || e.error?.message?.includes('WebSocket'))) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        if (e && e.reason && (String(e.reason).includes('WebSocket') || e.reason.message?.includes('WebSocket'))) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+    </script>
   </head>
   <body class="bg-[#FDFBF7] text-[#242924] antialiased selection:bg-[#E4ECE4] selection:text-[#233227] min-h-screen">
     <div id="root"></div>

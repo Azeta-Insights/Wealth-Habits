@@ -12,15 +12,34 @@ import {
   KeyRound,
   BrainCircuit,
   Plus,
-  X
+  X,
+  Bell,
+  Fingerprint,
+  Clock,
+  Sparkles,
+  Tag
 } from 'lucide-react';
 import { CategoryKey, TRANSACTION_CATEGORIES, TransactionEntity, UserProfile } from '../types';
 import {
   isPinLockEnabled,
   enablePinLock,
   disablePinLock,
-  lockSession
+  lockSession,
+  isBiometricSupported,
+  isBiometricEnabled,
+  registerBiometricUnlock,
+  disableBiometricUnlock
 } from '../utils/cryptoStorage';
+import {
+  isNotificationSupported,
+  getNotificationPermission,
+  isReminderEnabled,
+  setReminderEnabled,
+  getReminderTime,
+  setReminderTime,
+  requestReminderPermission,
+  sendTestReminder
+} from '../utils/reminders';
 import {
   getLearnedRules,
   learnCategoryRule,
@@ -28,6 +47,13 @@ import {
   resetCategoryRulesToDefault,
   CategoryRule
 } from '../utils/categoryRules';
+import {
+  getCustomCategories,
+  addCustomCategory,
+  removeCustomCategory,
+  getCategoryDisplay,
+  CustomCategory
+} from '../utils/customCategories';
 import { PWAInstallButton } from './PWAInstallButton';
 import { auth } from '../utils/firebase';
 
@@ -60,20 +86,107 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
 
+  // Biometric state
+  const [bioSupported, setBioSupported] = useState(false);
+  const [bioEnabled, setBioEnabled] = useState(false);
+  const [isSettingUpBio, setIsSettingUpBio] = useState(false);
+
+  // Evening Check-in Reminder state
+  const [remindersActive, setRemindersActive] = useState(false);
+  const [reminderTime, setReminderTimeState] = useState('20:00');
+  const [notificationPermission, setNotificationPermission] = useState<string>('default');
+  const [isSendingTest, setIsSendingTest] = useState(false);
+
   // Category Rules state
   const [rules, setRules] = useState<CategoryRule[]>([]);
   const [showAddRule, setShowAddRule] = useState(false);
   const [newRuleKeyword, setNewRuleKeyword] = useState('');
   const [newRuleCategory, setNewRuleCategory] = useState<CategoryKey>('FOOD');
 
+  // Custom Categories state
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+  const [showAddCustomCat, setShowAddCustomCat] = useState(false);
+  const [customCatName, setCustomCatName] = useState('');
+  const [customCatEmoji, setCustomCatEmoji] = useState('🏷️');
+  const [customCatKeywords, setCustomCatKeywords] = useState('');
+
   useEffect(() => {
     setPinEnabled(isPinLockEnabled());
     setRules(getLearnedRules());
+    setCustomCategories(getCustomCategories());
+
+    // Check biometrics
+    isBiometricSupported().then((supported) => {
+      setBioSupported(supported);
+      setBioEnabled(isBiometricEnabled());
+    });
+
+    // Check reminders
+    setRemindersActive(isReminderEnabled());
+    setReminderTimeState(getReminderTime());
+    setNotificationPermission(getNotificationPermission());
   }, []);
 
   const showNotification = (msg: string) => {
     setActionNotice(msg);
     setTimeout(() => setActionNotice(null), 3500);
+  };
+
+  // Toggle Biometrics
+  const handleToggleBiometrics = async () => {
+    if (bioEnabled) {
+      disableBiometricUnlock();
+      setBioEnabled(false);
+      showNotification('Biometric unlock disabled');
+    } else {
+      setIsSettingUpBio(true);
+      const res = await registerBiometricUnlock();
+      setIsSettingUpBio(false);
+      if (res.success) {
+        setBioEnabled(true);
+        showNotification('Fingerprint / FaceID unlock activated!');
+      } else {
+        showNotification(res.error || 'Failed to enable biometrics');
+      }
+    }
+  };
+
+  // Toggle Evening Reminders
+  const handleToggleReminders = async () => {
+    if (remindersActive) {
+      setReminderEnabled(false);
+      setRemindersActive(false);
+      showNotification('Evening reminders turned off');
+    } else {
+      const granted = await requestReminderPermission();
+      setNotificationPermission(getNotificationPermission());
+      if (granted) {
+        setRemindersActive(true);
+        showNotification('Daily evening check-in reminders activated 🌱');
+      } else {
+        showNotification('Notification permission was not granted by your browser');
+      }
+    }
+  };
+
+  // Change Reminder Time
+  const handleTimeChange = (newTime: string) => {
+    setReminderTimeState(newTime);
+    setReminderTime(newTime);
+    showNotification(`Daily check-in time set to ${newTime}`);
+  };
+
+  // Send Test Reminder
+  const handleSendTestReminder = async () => {
+    setIsSendingTest(true);
+    const res = await sendTestReminder();
+    setIsSendingTest(false);
+    if (res.success) {
+      showNotification('Test notification sent! Check your device notifications.');
+    } else {
+      setNotificationPermission(getNotificationPermission());
+      showNotification(res.error || 'Could not send test notification');
+    }
   };
 
   // Handle Export CSV
@@ -144,7 +257,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setRules(getLearnedRules());
     setNewRuleKeyword('');
     setShowAddRule(false);
-    showNotification(`Learned rule: "${newRuleKeyword.trim()}" → ${TRANSACTION_CATEGORIES[newRuleCategory].displayName}`);
+    showNotification(`Learned rule: "${newRuleKeyword.trim()}" → ${TRANSACTION_CATEGORIES[newRuleCategory]?.displayName || newRuleCategory}`);
   };
 
   // Handle Delete Rule
@@ -159,6 +272,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     resetCategoryRulesToDefault();
     setRules(getLearnedRules());
     showNotification('Reset category rules to default');
+  };
+
+  // Handle Add Custom Category
+  const handleAddCustomCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customCatName.trim()) return;
+    const keywords = customCatKeywords
+      .split(',')
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0);
+
+    const created = addCustomCategory(customCatName.trim(), customCatEmoji, keywords);
+    setCustomCategories(getCustomCategories());
+    setCustomCatName('');
+    setCustomCatEmoji('🏷️');
+    setCustomCatKeywords('');
+    setShowAddCustomCat(false);
+    showNotification(`Created custom category: ${created.emoji} ${created.displayName}`);
+  };
+
+  // Handle Delete Custom Category
+  const handleDeleteCustomCategory = (idOrKey: string) => {
+    removeCustomCategory(idOrKey);
+    setCustomCategories(getCustomCategories());
+    showNotification('Custom category removed');
   };
 
   return (
@@ -375,12 +513,129 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             )}
 
+            {/* Biometric Toggle when Passcode is Active & Device Supports it */}
+            {pinEnabled && bioSupported && (
+              <div className="p-3.5 rounded-2xl bg-[#F4F8F5] border border-[#CDE5D4] flex items-center justify-between gap-3">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-[#3D5A45] text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Fingerprint className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-[#143D22]">Fingerprint / FaceID Unlock</p>
+                    <p className="text-[11px] text-[#4A6352]">Unlock journal instantly with device biometrics</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleBiometrics}
+                  disabled={isSettingUpBio}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition active:scale-95 cursor-pointer ${
+                    bioEnabled
+                      ? 'bg-[#E4ECE4] text-[#143D22] border border-[#B3D6BD] hover:bg-[#D4E8DC]'
+                      : 'bg-[#3D5A45] text-white hover:bg-[#344D3A] shadow-xs'
+                  }`}
+                >
+                  {isSettingUpBio ? 'Verifying...' : bioEnabled ? 'Enabled' : 'Enable'}
+                </button>
+              </div>
+            )}
+
             <div className="flex items-start gap-2 text-[11px] text-[#636C62] bg-[#FAF7F2] p-3 rounded-2xl border border-[#EFE9DE]">
               <ShieldCheck className="w-4 h-4 text-[#3D5A45] shrink-0 mt-0.5" />
               <span>
                 When enabled, your financial data is locked directly on this device. Switching tabs or closing your browser locks the app automatically.
               </span>
             </div>
+          </div>
+
+          {/* 3. Daily Cash & POS Check-in Card */}
+          <div className="bg-white rounded-3xl p-6 border border-[#E8E2D9] shadow-sm space-y-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-[#FAF7F2] text-[#3D5A45] border border-[#E8E2D9] flex items-center justify-center">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-editorial text-base font-bold text-[#233227]">
+                    Daily Cash & POS Check-in
+                  </h4>
+                  <p className="text-xs text-[#636C62]">
+                    Gentle evening prompt so unbanked cash, keke, or street POS spends don't slip away.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleToggleReminders}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  remindersActive ? 'bg-[#3D5A45]' : 'bg-[#E2D9CA]'
+                }`}
+                aria-label="Toggle evening check-in reminder"
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    remindersActive ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Time & Test Button when Active */}
+            {remindersActive ? (
+              <div className="space-y-3 pt-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-[#FAF7F2] border border-[#E8E2D9]">
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-4 h-4 text-[#3D5A45]" />
+                    <span className="text-xs font-semibold text-[#233227]">Check-in Time</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="time"
+                      value={reminderTime}
+                      onChange={(e) => handleTimeChange(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl border border-[#D5CBBF] text-xs font-bold text-[#233227] bg-white focus:outline-none focus:ring-2 focus:ring-[#3D5A45]"
+                    />
+                    <span className="text-[11px] text-[#636C62] font-medium">Daily</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleSendTestReminder}
+                    disabled={isSendingTest}
+                    className="px-3.5 py-2 rounded-xl border border-[#D5CBBF] text-xs font-semibold text-[#233227] hover:bg-[#FAF7F2] transition flex items-center space-x-1.5 active:scale-95 cursor-pointer"
+                  >
+                    <Bell className="w-3.5 h-3.5 text-[#3D5A45]" />
+                    <span>{isSendingTest ? 'Sending...' : 'Send Test Reminder'}</span>
+                  </button>
+
+                  <span className="text-[11px] text-[#20603D] font-medium flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Active at {reminderTime}</span>
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="pt-1">
+                <p className="text-xs text-[#636C62] leading-relaxed">
+                  Most Nigerian daily spends happen on the go via cash, bus conductor, or roadside POS. Turn on reminders to review your evening rhythm in seconds.
+                </p>
+              </div>
+            )}
+
+            {notificationPermission === 'denied' && (
+              <div className="p-3 rounded-2xl bg-[#FEF3EB] border border-[#FCD8BD] text-[#B25E1A] text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>Browser notifications are blocked</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  To enable gentle evening prompts, tap the lock or site settings icon in your browser address bar and switch Notifications to <strong>Allow</strong>.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -429,11 +684,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     onChange={(e) => setNewRuleCategory(e.target.value as CategoryKey)}
                     className="px-3.5 py-2 rounded-xl border border-[#D5CBBF] text-xs bg-white text-[#233227] focus:outline-none"
                   >
-                    {Object.entries(TRANSACTION_CATEGORIES).map(([k, c]) => (
-                      <option key={k} value={k}>
-                        {c.emoji} {c.displayName}
-                      </option>
-                    ))}
+                    <optgroup label="Standard Categories">
+                      {Object.entries(TRANSACTION_CATEGORIES).map(([k, c]) => (
+                        <option key={k} value={k}>
+                          {c.emoji} {c.displayName}
+                        </option>
+                      ))}
+                    </optgroup>
+                    {customCategories.length > 0 && (
+                      <optgroup label="Custom Categories">
+                        {customCategories.map((c) => (
+                          <option key={c.key} value={c.key}>
+                            {c.emoji} {c.displayName}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
                 <div className="flex gap-2">
@@ -460,7 +726,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <p className="text-xs text-[#8A9588] italic py-2 text-center">No category rules learned yet.</p>
               ) : (
                 rules.map((rule) => {
-                  const cat = TRANSACTION_CATEGORIES[rule.category];
+                  const cat = getCategoryDisplay(rule.category);
                   return (
                     <div
                       key={rule.id}
@@ -470,8 +736,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <span className="font-bold text-[#233227]">{rule.merchantPattern}</span>
                         <span className="text-[#8A9588]">&rarr;</span>
                         <span className="inline-flex items-center gap-1 font-semibold text-[#3D5A45]">
-                          <span>{cat?.emoji || '🏷️'}</span>
-                          <span>{cat?.displayName || rule.category}</span>
+                          <span>{cat.emoji}</span>
+                          <span>{cat.displayName}</span>
                         </span>
                       </div>
 
@@ -495,6 +761,110 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               >
                 Reset to default Nigerian rules
               </button>
+            </div>
+          </div>
+
+          {/* 6. Custom Spending Categories */}
+          <div className="bg-white rounded-3xl p-6 border border-[#E8E2D9] shadow-sm space-y-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-2.5">
+                <Tag className="w-5 h-5 text-[#3D5A45]" />
+                <div>
+                  <h4 className="font-editorial text-base font-bold text-[#233227]">
+                    Custom Spending Categories
+                  </h4>
+                  <p className="text-xs text-[#636C62]">
+                    Create non-limiting categories tailored to your financial habits (e.g. Ajo contribution, Church building, Crypto).
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowAddCustomCat(!showAddCustomCat)}
+                className="px-3 py-1.5 rounded-xl border border-[#3D5A45] text-[#3D5A45] text-xs font-semibold hover:bg-[#E4ECE4] transition flex items-center space-x-1 shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Category</span>
+              </button>
+            </div>
+
+            {/* Add Custom Category Form */}
+            {showAddCustomCat && (
+              <form onSubmit={handleAddCustomCategory} className="p-4 rounded-2xl bg-[#FAF7F2] border border-[#E2D9CA] space-y-3 animate-fadeIn">
+                <h5 className="text-xs font-bold text-[#233227]">Create Custom Category</h5>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Category Name (e.g. Ajo / Esusu)"
+                    value={customCatName}
+                    onChange={(e) => setCustomCatName(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-[#D5CBBF] text-xs bg-white text-[#233227] focus:outline-none focus:ring-2 focus:ring-[#3D5A45]"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Emoji (e.g. 🪙 or 🤝)"
+                    value={customCatEmoji}
+                    onChange={(e) => setCustomCatEmoji(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-[#D5CBBF] text-xs bg-white text-[#233227] focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Keywords (comma separated)"
+                    value={customCatKeywords}
+                    onChange={(e) => setCustomCatKeywords(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-[#D5CBBF] text-xs bg-white text-[#233227] focus:outline-none"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-[#3D5A45] text-white text-xs font-semibold hover:bg-[#344D3A]"
+                  >
+                    Save Category
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCustomCat(false)}
+                    className="px-3 py-2 rounded-xl border border-[#D5CBBF] text-xs text-[#636C62] hover:bg-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Custom Categories List */}
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              {customCategories.length === 0 ? (
+                <p className="text-xs text-[#8A9588] italic py-2 text-center">
+                  No custom categories yet. Tap &quot;New Category&quot; to define your own.
+                </p>
+              ) : (
+                customCategories.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-[#FAF7F2] border border-[#EFE9DE] text-xs"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <span className="text-base">{c.emoji}</span>
+                      <span className="font-bold text-[#233227]">{c.displayName}</span>
+                      {c.keywords.length > 0 && (
+                        <span className="text-[10px] text-[#759A7E] font-medium hidden sm:inline">
+                          ({c.keywords.slice(0, 3).join(', ')}{c.keywords.length > 3 ? '...' : ''})
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleDeleteCustomCategory(c.id)}
+                      className="text-[#8A9588] hover:text-[#C53B27] p-1 transition"
+                      title="Delete category"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 

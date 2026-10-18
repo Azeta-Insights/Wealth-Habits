@@ -1,5 +1,6 @@
 import { CategoryKey, TRANSACTION_CATEGORIES, TransactionEntity } from '../types';
 import { matchLearnedCategory } from './categoryRules';
+import { matchCustomCategory } from './customCategories';
 
 export interface BankSenderRule {
   bankName: string;
@@ -20,22 +21,40 @@ export const BANK_RULES: BankSenderRule[] = [
   { bankName: 'Fidelity Bank', senderPatterns: ['fidelity', 'fidelitybank', 'fidelity bank'] }
 ];
 
+/**
+ * 4-Priority Hierarchical Matching:
+ * 1. User-learned custom rules (matchLearnedCategory)
+ * 2. Custom user-created categories (matchCustomCategory)
+ * 3. Expanded 15-category Nigerian keyword lists
+ * 4. Fallback: Default to 'OTHER'
+ */
 export function matchCategoryFromNarration(narration: string): CategoryKey {
-  // 1. Check user-learned category rules first
-  const customMatch = matchLearnedCategory(narration);
-  if (customMatch) {
-    return customMatch;
+  if (!narration || !narration.trim()) return 'OTHER';
+
+  // 1. First Priority: Check user-learned merchant patterns
+  const learnedMatch = matchLearnedCategory(narration);
+  if (learnedMatch) {
+    return learnedMatch;
   }
 
+  // 2. Second Priority: Check custom user-created categories
+  const customCat = matchCustomCategory(narration);
+  if (customCat) {
+    return customCat as CategoryKey;
+  }
+
+  // 3. Third Priority: Check expanded 15-category Nigerian keywords
   const lower = narration.toLowerCase();
   for (const [key, category] of Object.entries(TRANSACTION_CATEGORIES)) {
     if (key === 'OTHER') continue;
     for (const keyword of category.keywords) {
-      if (lower.includes(keyword)) {
+      if (keyword && lower.includes(keyword.toLowerCase())) {
         return key as CategoryKey;
       }
     }
   }
+
+  // 4. Fallback: Default to OTHER only if no match is found
   return 'OTHER';
 }
 

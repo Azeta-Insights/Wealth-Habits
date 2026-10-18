@@ -3,6 +3,7 @@ import { X, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import { CategoryKey, StatementParseResult, TRANSACTION_CATEGORIES, TransactionEntity } from '../types';
 import { formatNaira } from '../utils/insightEngine';
 import { learnCategoryRule } from '../utils/categoryRules';
+import { getCustomCategories, getCategoryDisplay } from '../utils/customCategories';
 
 interface StatementReviewModalProps {
   result: StatementParseResult | null;
@@ -20,6 +21,7 @@ export const StatementReviewModal: React.FC<StatementReviewModalProps> = ({
   if (!isOpen || !result) return null;
 
   const [items, setItems] = useState<Array<Omit<TransactionEntity, 'id'>>>(result.transactions);
+  const customCategories = getCustomCategories();
 
   const handleUpdateCategory = (index: number, newCategory: CategoryKey) => {
     const updated = [...items];
@@ -27,7 +29,7 @@ export const StatementReviewModal: React.FC<StatementReviewModalProps> = ({
     updated[index] = { ...target, category: newCategory };
     setItems(updated);
 
-    if (target.narration && target.narration.length >= 3) {
+    if (target.narration && target.narration.trim().length >= 3) {
       learnCategoryRule(target.narration, newCategory);
     }
   };
@@ -82,7 +84,7 @@ export const StatementReviewModal: React.FC<StatementReviewModalProps> = ({
         {/* Transactions Table / List */}
         <div className="flex-1 overflow-y-auto space-y-2 pr-1 my-2">
           {items.map((tx, idx) => {
-            const cat = TRANSACTION_CATEGORIES[tx.category];
+            const cat = getCategoryDisplay(tx.category);
             const dateStr = new Date(tx.timestamp).toLocaleDateString('en-GB', {
               day: 'numeric',
               month: 'short'
@@ -107,11 +109,22 @@ export const StatementReviewModal: React.FC<StatementReviewModalProps> = ({
                   onChange={(e) => handleUpdateCategory(idx, e.target.value as CategoryKey)}
                   className="text-[11px] font-medium bg-white border border-[#D5CBBF] rounded-lg px-2 py-1 text-[#233227] focus:outline-none"
                 >
-                  {Object.entries(TRANSACTION_CATEGORIES).map(([k, c]) => (
-                    <option key={k} value={k}>
-                      {c.emoji} {c.displayName}
-                    </option>
-                  ))}
+                  <optgroup label="Standard Categories">
+                    {Object.entries(TRANSACTION_CATEGORIES).map(([k, c]) => (
+                      <option key={k} value={k}>
+                        {c.emoji} {c.displayName}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {customCategories.length > 0 && (
+                    <optgroup label="Custom Categories">
+                      {customCategories.map((c) => (
+                        <option key={c.key} value={c.key}>
+                          {c.emoji} {c.displayName}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
 
                 <div className="text-right shrink-0">

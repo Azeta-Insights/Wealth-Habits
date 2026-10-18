@@ -12,7 +12,10 @@ import {
   Loader2,
   ShieldCheck,
   Building,
-  Tag
+  Tag,
+  FileSpreadsheet,
+  Scan,
+  Image as ImageIcon
 } from 'lucide-react';
 import {
   CategoryKey,
@@ -24,8 +27,11 @@ import {
 import { parseBatchAlerts, parseSmsText } from '../utils/smsParser';
 import { parseStatementCsv } from '../utils/statementParser';
 import { parseStatementPdf } from '../utils/pdfStatementParser';
+import { parseStatementExcel } from '../utils/excelStatementParser';
+import { parseStatementWithAiOcr } from '../utils/aiStatementParser';
 import { formatNaira } from '../utils/insightEngine';
 import { learnCategoryRule } from '../utils/categoryRules';
+import { getCustomCategories, getCategoryDisplay } from '../utils/customCategories';
 
 interface AddImportViewProps {
   onAddManual: (
@@ -140,71 +146,162 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
     setTimeout(() => setManualSuccessMsg(null), 3500);
   };
 
-  // Handle Statement File Processing (CSV or PDF)
-  const processStatementFile = async (file: File, password?: string) => {
+  // Handle Statement File Processing (Excel, CSV, PDF with AI OCR, or Photo Receipt)
+  const processStatementFile = async (file: File, password?: string, forceAiOcr = false) => {
     setStatementParsingError(null);
     setPdfPasswordError(null);
     setIsProcessingFile(true);
-    setFileProgressText('Reading statement file...');
+    setFileProgressText('Identifying statement format...');
 
-    const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+    const fileNameLower = file.name.toLowerCase();
+    const isExcel = fileNameLower.endsWith('.xlsx') || fileNameLower.endsWith('.xls');
+    const isCsv = fileNameLower.endsWith('.csv') || fileNameLower.endsWith('.txt');
+    const isPdf = fileNameLower.endsWith('.pdf') || file.type === 'application/pdf';
+    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(fileNameLower);
 
-    if (isPdf) {
-      try {
-        const result = await parseStatementPdf(file, password, (_current, _total, status) => {
+    try {
+      // 1. EXCEL SPREADSHEETS (.xlsx, .xls)
+      if (isExcel) {
+        setFileProgressText('Reading Excel statement and columns...');
+        const result = await parseStatementExcel(file);
+        setIsProcessingFile(false);
+        setFileProgressText(null);
+
+        if (result.transactions.length === 0) {
+          setStatementParsingError('No transaction rows could be found in this Excel sheet. Please verify the sheet has Date, Amount, and Narration columns.');
+          return;
+        }
+
+        onOpenStatementReview(result);
+        return;
+      }
+
+      // 2. CSV / TXT STATEMENTS
+      if (isCsv && !forceAiOcr) {
+        setFileProgressText('Parsing CSV statement table...');
+        try {
+          const result = await parseStatementExcel(file);
+          if (result.transactions.length > 0) {
+            setIsProcessingFile(false);
+            setFileProgressText(null);
+            onOpenStatementReview(result);
+            return;
+          }
+        } catch {
+          // Fallback to text reader for CSV
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setIsProcessingFile(false);
+          setFileProgressText(null);
+          try {
+            const text = e.target?.result as string;
+            const result = parseStatementCsv(text, file.name);
+            if (result.transactions.length === 0) {
+              setStatementParsingError('No valid transaction rows found in statement. Please check CSV format.');
+              return;
+            }
+            onOpenStatementReview(result);
+          } catch {
+            setStatementParsingError('Failed to parse CSV statement file.');
+          }
+        };
+        reader.onerror = () => {
+          setIsProcessingFile(false);
+          setFileProgressText(null);
+          setStatementParsingError('Failed to read CSV file.');
+        };
+        reader.readAsText(file);
+        return;
+      }
+
+      // 3. IMAGE / PHOTO OF BANK STATEMENT OR RECEIPT
+      if (isImage || forceAiOcr) {
+        setFileProgressText('Scanning document with AI OCR engine...');
+        const result = await parseStatementWithAiOcr(file, (status) => {
           setFileProgressText(status);
         });
 
         setIsProcessingFile(false);
         setFileProgressText(null);
-        setPendingPdfFile(null);
-        setPdfPasswordInput('');
 
         if (result.transactions.length === 0) {
-          setStatementParsingError('No recognizable transaction rows found in this PDF statement. Try uploading a CSV or pasting transaction alerts.');
+          setStatementParsingError('AI OCR scanned the image, but could not detect readable transaction rows.');
           return;
         }
 
         onOpenStatementReview(result);
-      } catch (err: unknown) {
-        setIsProcessingFile(false);
-        setFileProgressText(null);
-        const errObj = err as { name?: string; message?: string };
-
-        if (errObj?.name === 'PasswordException' || (errObj?.message && errObj.message.toLowerCase().includes('password'))) {
-          setPendingPdfFile(file);
-          setPdfPasswordError('This bank statement PDF is password-protected. Please enter your password (e.g. your phone number or account number).');
-        } else {
-          console.error('PDF parsing error', err);
-          setStatementParsingError(
-            'Could not extract text from this PDF. Many Nigerian banks offer CSV/Excel statement downloads in online banking, or you can copy and paste your debit/credit alert SMS directly in the "Paste SMS Alert" tab above.'
-          );
-        }
+        return;
       }
-    } else {
-      // CSV or TXT file
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setIsProcessingFile(false);
-        setFileProgressText(null);
+
+      // 4. PDF BANK STATEMENT
+      if (isPdf) {
+        let pdfResult: StatementParseResult | null = null;
+        let requiresPassword = false;
+
         try {
-          const text = e.target?.result as string;
-          const result = parseStatementCsv(text, file.name);
-          if (result.transactions.length === 0) {
-            setStatementParsingError('No valid transaction rows found in statement. Please check CSV format.');
+          setFileProgressText('Analyzing PDF with high-speed local engine...');
+          pdfResult = await parseStatementPdf(file, password, (_current, _total, status) => {
+            setFileProgressText(status);
+          });
+        } catch (pdfErr: unknown) {
+          const errObj = pdfErr as { name?: string; message?: string };
+          if (errObj?.name === 'PasswordException' || (errObj?.message && errObj.message.toLowerCase().includes('password'))) {
+            requiresPassword = true;
+            setIsProcessingFile(false);
+            setFileProgressText(null);
+            setPendingPdfFile(file);
+            setPdfPasswordError('This bank statement PDF is password-protected. Please enter your password (e.g. your phone number or account number).');
             return;
           }
-          onOpenStatementReview(result);
-        } catch {
-          setStatementParsingError('Failed to parse CSV statement file.');
+          // If local text extraction fails (e.g. scanned PDF without text layer), proceed to AI OCR
+          console.log('Local PDF extraction was unable to parse text directly, falling back to AI OCR:', pdfErr);
         }
-      };
-      reader.onerror = () => {
-        setIsProcessingFile(false);
-        setFileProgressText(null);
-        setStatementParsingError('Failed to read file.');
-      };
-      reader.readAsText(file);
+
+        // If local parser succeeded and found transactions, use them immediately
+        if (pdfResult && pdfResult.transactions.length > 0) {
+          setIsProcessingFile(false);
+          setFileProgressText(null);
+          setPendingPdfFile(null);
+          setPdfPasswordInput('');
+          onOpenStatementReview(pdfResult);
+          return;
+        }
+
+        // If local parser found 0 transactions or encountered complex/scanned format, seamlessly activate AI OCR!
+        if (!requiresPassword) {
+          setFileProgressText('Digital text not found. Scanning scanned pages with AI OCR engine...');
+          const ocrResult = await parseStatementWithAiOcr(file, (status) => {
+            setFileProgressText(status);
+          });
+
+          setIsProcessingFile(false);
+          setFileProgressText(null);
+          setPendingPdfFile(null);
+          setPdfPasswordInput('');
+
+          if (ocrResult.transactions.length === 0) {
+            setStatementParsingError('Could not detect transaction rows from this PDF statement. Try uploading an Excel (.xlsx) statement or pasting alerts.');
+            return;
+          }
+
+          onOpenStatementReview(ocrResult);
+          return;
+        }
+      }
+
+      // Unrecognized format
+      setIsProcessingFile(false);
+      setFileProgressText(null);
+      setStatementParsingError('Unsupported file type. Please upload a PDF, Excel (.xlsx, .xls), CSV, or photo receipt.');
+    } catch (err: any) {
+      console.warn('Statement processing notice:', err?.message || err);
+      setIsProcessingFile(false);
+      setFileProgressText(null);
+      setStatementParsingError(
+        err?.message || 'Could not parse this statement. You can also paste your bank debit/credit alerts directly in the "Paste SMS Alert" tab.'
+      );
     }
   };
 
@@ -341,37 +438,77 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
                 </div>
 
                 <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                  {parsedPreview.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3.5 rounded-2xl bg-[#FAF7F2] border border-[#E2EBE2] flex items-center justify-between text-xs"
-                    >
-                      <div className="flex items-center space-x-2.5">
-                        <span className="text-xl">
-                          {TRANSACTION_CATEGORIES[item.category]?.emoji || '✨'}
-                        </span>
-                        <div>
-                          <p className="font-bold text-[#233227]">{item.narration}</p>
-                          <p className="text-[10px] text-[#636C62]">
-                            {item.bankName || 'Bank Alert'} &bull; {TRANSACTION_CATEGORIES[item.category]?.displayName}
-                          </p>
+                  {parsedPreview.map((item, idx) => {
+                    const catInfo = getCategoryDisplay(item.category);
+                    const customCats = getCustomCategories();
+
+                    return (
+                      <div
+                        key={idx}
+                        className="p-3.5 rounded-2xl bg-[#FAF7F2] border border-[#E2EBE2] flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2.5"
+                      >
+                        <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                          <span className="text-xl shrink-0">
+                            {catInfo.emoji}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-bold text-[#233227] truncate">{item.narration}</p>
+                            <p className="text-[10px] text-[#636C62]">
+                              {item.bankName || 'Bank Alert'} &bull; {catInfo.displayName}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0">
+                          {/* Inline Category Changer */}
+                          <select
+                            value={item.category}
+                            onChange={(e) => {
+                              const newCat = e.target.value as CategoryKey;
+                              const updated = [...parsedPreview];
+                              updated[idx] = { ...updated[idx], category: newCat };
+                              setParsedPreview(updated);
+                              if (item.narration && item.narration.trim().length >= 3) {
+                                learnCategoryRule(item.narration, newCat);
+                              }
+                            }}
+                            className="text-[11px] font-medium bg-white border border-[#D5CBBF] rounded-lg px-2 py-1 text-[#233227] focus:outline-none"
+                          >
+                            <optgroup label="Standard Categories">
+                              {Object.entries(TRANSACTION_CATEGORIES).map(([k, c]) => (
+                                <option key={k} value={k}>
+                                  {c.emoji} {c.displayName}
+                                </option>
+                              ))}
+                            </optgroup>
+                            {customCats.length > 0 && (
+                              <optgroup label="Custom Categories">
+                                {customCats.map((c) => (
+                                  <option key={c.key} value={c.key}>
+                                    {c.emoji} {c.displayName}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </select>
+
+                          <div className="text-right">
+                            <p
+                              className={`font-bold text-sm ${
+                                item.type === 'DEBIT' ? 'text-[#C84A32]' : 'text-[#20603D]'
+                              }`}
+                            >
+                              {item.type === 'DEBIT' ? '-' : '+'}
+                              {formatNaira(item.amount)}
+                            </p>
+                            <span className="text-[9px] font-semibold text-[#636C62] uppercase bg-white px-1.5 py-0.5 rounded border border-[#E8E2D9]">
+                              {item.type}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p
-                          className={`font-bold text-sm ${
-                            item.type === 'DEBIT' ? 'text-[#C84A32]' : 'text-[#20603D]'
-                          }`}
-                        >
-                          {item.type === 'DEBIT' ? '-' : '+'}
-                          {formatNaira(item.amount)}
-                        </p>
-                        <span className="text-[9px] font-semibold text-[#636C62] uppercase bg-white px-1.5 py-0.5 rounded border border-[#E8E2D9]">
-                          {item.type}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <button
@@ -504,7 +641,7 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
                   <input
                     id="statement-file-input"
                     type="file"
-                    accept=".pdf,.csv,.txt"
+                    accept=".pdf,.xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg,.webp"
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
@@ -515,31 +652,46 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
                     <UploadCloud className="w-7 h-7" />
                   </div>
                   <p className="text-sm sm:text-base font-bold text-[#233227] mb-1">
-                    Drag & Drop bank statement PDF or CSV here
+                    Drag & Drop bank statement PDF, Excel, CSV, or photo
                   </p>
                   <p className="text-xs text-[#636C62] mb-4">
-                    or click to browse from device (PDF, CSV, or TXT)
+                    Supports PDF statements, Excel (.xlsx/.xls), CSV tables, and scanned photos
                   </p>
 
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-full border border-[#D5CBBF] text-[11px] font-semibold text-[#4F5B51]">
-                    <span>Supports GTBank &bull; Access &bull; Zenith &bull; Kuda &bull; First Bank &bull; OPay</span>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 mb-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#E4ECE4] text-[#233227] border border-[#CCE3D1]">
+                      📄 PDF (Digital & Scanned)
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#EBF3EC] text-[#143D22] border border-[#CCE3D1]">
+                      📊 Excel (.xlsx, .xls)
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#F4F1EA] text-[#4F5B51] border border-[#D5CBBF]">
+                      📑 CSV
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FEF3EB] text-[#C53B27] border border-[#FADCD5]">
+                      ✨ AI OCR Enabled
+                    </span>
+                  </div>
+
+                  <div className="inline-flex items-center gap-1 px-3 py-1 bg-white rounded-full border border-[#D5CBBF] text-[11px] font-semibold text-[#4F5B51]">
+                    <span>GTBank &bull; Access &bull; Zenith &bull; Kuda &bull; First Bank &bull; OPay &bull; Stanbic</span>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Right Column: Statement Instructions & Security Guarantee */}
+          {/* Right Column: Statement Instructions & Multi-Format Guarantee */}
           <div className="lg:col-span-5 space-y-4">
             <div className="bg-white rounded-3xl p-6 border border-[#E8E2D9] shadow-sm space-y-3">
               <div className="flex items-center space-x-2 text-[#3D5A45]">
-                <ShieldCheck className="w-5 h-5" />
+                <Scan className="w-5 h-5 text-[#059669]" />
                 <h4 className="font-editorial text-base font-bold text-[#233227]">
-                  100% Private to Your Device
+                  High-Precision Extraction & AI OCR
                 </h4>
               </div>
               <p className="text-xs text-[#636C62] leading-relaxed">
-                Bank statements contain sensitive details like account numbers and full names. Wealth Habits reads and extracts your statements <strong>entirely inside your device</strong>. Your statement files and financial records are never uploaded to any cloud server or external database.
+                Whether you download an official <strong>Excel (.xlsx)</strong> or <strong>CSV</strong> spreadsheet from internet banking, or upload a <strong>PDF statement</strong> (including scanned documents), Wealth Habits automatically extracts every transaction, amount, and date.
               </p>
             </div>
 
@@ -684,7 +836,7 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-80 overflow-y-auto pr-1">
               {Object.entries(TRANSACTION_CATEGORIES).map(([key, cat]) => (
                 <button
                   type="button"
@@ -692,6 +844,22 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
                   onClick={() => setSelectedCategory(key as CategoryKey)}
                   className={`p-3.5 rounded-2xl border text-left flex items-center space-x-2.5 transition-all ${
                     selectedCategory === key
+                      ? 'bg-[#E4ECE4] border-[#3D5A45] ring-1 ring-[#3D5A45] text-[#233227]'
+                      : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#636C62] hover:bg-[#EFE9DE]'
+                  }`}
+                >
+                  <span className="text-2xl">{cat.emoji}</span>
+                  <span className="text-xs font-semibold leading-tight">{cat.displayName}</span>
+                </button>
+              ))}
+
+              {getCustomCategories().map((cat) => (
+                <button
+                  type="button"
+                  key={cat.key}
+                  onClick={() => setSelectedCategory(cat.key as CategoryKey)}
+                  className={`p-3.5 rounded-2xl border text-left flex items-center space-x-2.5 transition-all ${
+                    selectedCategory === cat.key
                       ? 'bg-[#E4ECE4] border-[#3D5A45] ring-1 ring-[#3D5A45] text-[#233227]'
                       : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#636C62] hover:bg-[#EFE9DE]'
                   }`}

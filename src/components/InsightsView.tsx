@@ -21,6 +21,7 @@ import {
 import { ReflectionType, TransactionEntity, UserProfile, WealthInsight, TRANSACTION_CATEGORIES, CategoryKey } from '../types';
 import { formatNaira } from '../utils/insightEngine';
 import { detectRecurringCharges } from '../utils/subscriptions';
+import { getCategoryDisplay } from '../utils/customCategories';
 import { MonthlySummaryCardModal } from './MonthlySummaryCardModal';
 
 interface InsightsViewProps {
@@ -227,7 +228,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
             </div>
           ) : (
             insights.map((insight) => {
-              const categoryInfo = insight.category ? TRANSACTION_CATEGORIES[insight.category] : null;
+              const categoryInfo = insight.category ? getCategoryDisplay(insight.category) : null;
 
               return (
                 <div
@@ -532,7 +533,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
             ) : (
               <div className="space-y-3">
                 {categorySpending.slice(0, 5).map((item) => {
-                  const cat = TRANSACTION_CATEGORIES[item.category];
+                  const cat = getCategoryDisplay(item.category);
                   return (
                     <div key={item.category} className="space-y-1">
                       <div className="flex justify-between text-xs font-semibold text-[#233227]">

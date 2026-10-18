@@ -232,7 +232,7 @@ export function generateInsights(
   // If no specific insight generated, fall back to recent transaction prompt
   if (insights.length === 0 && debits.length > 0) {
     const latest = debits[0];
-    const catInfo = TRANSACTION_CATEGORIES[latest.category];
+    const catInfo = TRANSACTION_CATEGORIES[latest.category] || TRANSACTION_CATEGORIES.OTHER;
     const singleId = `single_tx_${latest.id}`;
     insights.push({
       id: singleId,
