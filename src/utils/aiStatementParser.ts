@@ -9,7 +9,7 @@ export async function parseStatementWithAiOcr(
 
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error('Gemini API key is missing. Please add VITE_GEMINI_API_KEY in your Vercel environment variables.');
+    throw new Error('Gemini API key is missing. Please add VITE_GEMINI_API_KEY in your Vercel Environment Variables.');
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -29,12 +29,12 @@ export async function parseStatementWithAiOcr(
   onProgress?.('Analyzing transactions with Gemini AI OCR...');
 
   const prompt = `
-  You are an expert financial document parser for Nigerian bank statements (GTBank, Access, Zenith, Kuda, OPay, Moniepoint, UBA, First Bank, etc.).
+  You are an expert financial document parser for Nigerian bank statements (GTBank, Access, Zenith, Kuda, OPay, Moniepoint, UBA, First Bank, Stanbic, Fidelity, etc.).
   Analyze this bank statement document image or PDF page and extract all individual transactions.
   
   For each transaction, extract:
-  - date: ISO string or standard format date
-  - narration: The transaction description or merchant name (clean up reference numbers and bank boilerplate)
+  - date: ISO string or standard format date (YYYY-MM-DD or DD/MM/YYYY)
+  - narration: The transaction description or merchant name (clean up reference numbers and bank boilerplate like NIP/, POS PUR, etc.)
   - amount: The numerical amount as a positive number
   - type: 'DEBIT' (money out / withdrawal / purchase / fee) or 'CREDIT' (money in / deposit / inflow)
   - bankName: The name of the bank if identifiable from the header or text
