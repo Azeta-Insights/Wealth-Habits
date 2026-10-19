@@ -12,13 +12,31 @@ try {
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 }
 
+/**
+ * Helper exported for both local PDF parser and AI OCR parser to filter out
+ * OPay's internal OWealth funding & auto-save mirror entries.
+ */
+export function isOpayInternalMirrorRow(text: string): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase().trim();
+  return (
+    lower.includes('owealth withdrawal(transaction payment)') ||
+    lower.includes('owealth withdrawal (transaction payment)') ||
+    lower === 'owealth withdrawal' ||
+    lower === '(transaction payment)' ||
+    lower === 'transaction payment' ||
+    lower.includes('auto-save to owealth balance') ||
+    lower.includes('auto-save to owealth')
+  );
+}
+
 const MONTHS_MAP: Record<string, number> = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 11, dec: 11
 };
+MONTHS_MAP.nov = 10;
 
 function parseNigerianDate(dateStr: string): number | null {
-  // Matches "18 Sep 2026 10:27:23" or "18 Sep 2026"
   const dmyText = dateStr.match(
     /\b([0-3]?[0-9])\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(20[2-3][0-9])(?:\s+([0-2]?[0-9]):([0-5][0-9])(?::([0-5][0-9]))?)?/i
   );
@@ -32,7 +50,6 @@ function parseNigerianDate(dateStr: string): number | null {
     return new Date(year, month, day, hr, min, sec).getTime();
   }
 
-  // Matches "18/09/2026" or "18-09-2026" or "18-Sep-2026"
   const slashMatch = dateStr.match(
     /\b([0-3]?[0-9])[\/\-]([0-1]?[0-9]|[A-Za-z]{3})[\/\-](20[2-3][0-9]|[0-9]{2})\b/
   );
@@ -72,10 +89,8 @@ export async function parseStatementPdf(
     const page = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
 
-    // Group items by Y coordinate (within 4px tolerance) to reconstruct lines, but also keep raw stream
     const items = (textContent.items as any[]).filter((item) => item && typeof item.str === 'string');
 
-    // Sort top-to-bottom (descending Y in PDF coords), then left-to-right (ascending X)
     items.sort((a, b) => {
       const yA = a.transform ? a.transform[5] : 0;
       const yB = b.transform ? b.transform[5] : 0;
@@ -113,7 +128,7 @@ export async function parseStatementPdf(
 
   const bankName = identifyBankName(file.name, fullDocumentText.slice(0, 1500));
 
-  // Detect Account Holder Name (e.g. "BLESSING BUKOLA AZETA") to auto-detect self transfers!
+  // Detect Account Holder Name (e.g. "BLESSING BUKOLA AZETA") to auto-detect self transfers
   const acctNameMatch = fullDocumentText.match(/Account\s*Name\s*[:\-]?\s*([A-Z\s]{5,40})/i);
   const accountHolderTokens = acctNameMatch
     ? acctNameMatch[1]
@@ -122,10 +137,8 @@ export async function parseStatementPdf(
         .filter((w) => w.length >= 4 && !['account', 'number', 'wallet', 'period'].includes(w))
     : [];
 
-  // Reconstruct transaction blocks starting with a date+time or date pattern
   const joinedText = allPageLines.join('\n');
 
-  // Split into transaction records whenever we see a date timestamp like "18 Sep 2026 10:27:23" or line starting with date
   const txBlocks = joinedText.split(
     /(?=\b[0-3]?[0-9]\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20[2-3][0-9]\s+[0-2]?[0-9]:[0-5][0-9]:[0-5][0-9]\b|\b[0-3]?[0-9][\/\-](?:[0-1]?[0-9]|[A-Za-z]{3})[\/\-]20[2-3][0-9]\b)/i
   );
@@ -141,19 +154,12 @@ export async function parseStatementPdf(
     const timestamp = parseNigerianDate(block);
     if (!timestamp) continue;
 
-    // Skip OPay internal OWealth mirror rows (Auto-save & OWealth Withdrawal for payment)
-    const lowerBlock = block.toLowerCase();
-    if (
-      lowerBlock.includes('owealth withdrawal(transaction payment)') ||
-      lowerBlock.includes('owealth withdrawal (transaction payment)') ||
-      lowerBlock.includes('auto-save to owealth balance')
-    ) {
+    // Skip OPay internal OWealth mirror rows
+    if (isOpayInternalMirrorRow(block)) {
       continue;
     }
 
-    // Check for OPay "--" debit/credit column markers first:
-    // Pattern A (Debit): "<Amount> -- <Balance>"
-    // Pattern B (Credit): "-- <Amount> <Balance>"
+    const lowerBlock = block.toLowerCase();
     let amount = 0;
     let type: TransactionType = 'DEBIT';
 
@@ -167,7 +173,6 @@ export async function parseStatementPdf(
       amount = parseFloat(opayCreditMatch[1].replace(/,/g, ''));
       type = 'CREDIT';
     } else {
-      // Generic fallback for other Nigerian bank PDFs: find decimal numbers like 1,200.00
       const moneyMatches = Array.from(block.matchAll(/\b([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\b/g)).map((m) =>
         parseFloat(m[1].replace(/,/g, ''))
       );
@@ -190,71 +195,15 @@ export async function parseStatementPdf(
 
     if (!amount || amount <= 0) continue;
 
-    // Extract clean narration between the Value Date and the Amount / "--"
     let narration = block
-      // Remove leading Trans. Time and Value Date
       .replace(
         /^[0-3]?[0-9]\s+[A-Za-z]{3,9}\s+20[2-3][0-9]\s+[0-2]?[0-9]:[0-5][0-9]:[0-5][0-9]\s+[0-3]?[0-9]\s+[A-Za-z]{3,9}\s+20[2-3][0-9]\s*/i,
         ''
       )
       .replace(/^[0-3]?[0-9][\/\-][0-9A-Za-z]{2,3}[\/\-]20[2-3][0-9]\s*/i, '');
 
-    // Cut off everything from the Debit/Credit columns onward
     narration = narration
       .split(/\s+(?:--\s+[0-9]|[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}\s+--|[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}\s+[0-9])/)[0]
       .trim();
 
-    // Clean up trailing pipes or account numbers while keeping merchant/recipient names readable
-    narration = narration
-      .replace(/\|\s*[0-9*]{6,}\b/g, '')
-      .replace(/\s*\|\s*/g, ' - ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (!narration || narration.length < 2) {
-      narration = type === 'CREDIT' ? 'Account Inflow' : 'Account Spend';
-    }
-    if (narration.length > 75) {
-      narration = narration.slice(0, 75).trim();
-    }
-
-    // Categorize using learned rules & Nigerian category keywords
-    let category: CategoryKey = matchCategoryFromNarration(narration);
-
-    // Check if this is a Self-Transfer (e.g., "Transfer from Blessing Azeta - Xpress Wallet" or "POCKETAPP")
-    const narrLower = narration.toLowerCase();
-    const matchedOwnNameCount = accountHolderTokens.filter((tok) => narrLower.includes(tok)).length;
-    if (matchedOwnNameCount >= 2 && ('SELF_TRANSFER' in ({} as any) || true)) {
-      // If SELF_TRANSFER exists in TRANSACTION_CATEGORIES, use it; otherwise keep matched category
-      category = ('SELF_TRANSFER' as CategoryKey);
-    }
-
-    if (type === 'CREDIT') {
-      totalCredits += amount;
-    } else {
-      totalDebits += amount;
-    }
-
-    const hash = generateSimpleHash(bankName, amount, type, timestamp, narration);
-
-    transactions.push({
-      amount,
-      type,
-      category,
-      narration,
-      bankName,
-      source: 'STATEMENT',
-      timestamp,
-      reflection: null,
-      deduplicationHash: hash
-    });
-  }
-
-  return {
-    bankName,
-    fileName: file.name,
-    transactions,
-    totalCredits,
-    totalDebits
-  };
-}
+    nar
