@@ -4,7 +4,6 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { CategoryKey, StatementParseResult, TransactionEntity, TransactionType } from '../types';
 import { generateSimpleHash, identifyBankName, matchCategoryFromNarration } from './smsParser';
 
-// Configure PDF.js worker reliably for Vite + Vercel
 try {
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     pdfWorkerUrl || `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -12,10 +11,6 @@ try {
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 }
 
-/**
- * Helper exported for both local PDF parser and AI OCR parser to filter out
- * OPay's internal OWealth funding & auto-save mirror entries.
- */
 export function isOpayInternalMirrorRow(text: string): boolean {
   if (!text) return false;
   const lower = text.toLowerCase().trim();
@@ -32,9 +27,8 @@ export function isOpayInternalMirrorRow(text: string): boolean {
 
 const MONTHS_MAP: Record<string, number> = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-  jul: 6, aug: 7, sep: 8, oct: 9, nov: 11, dec: 11
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
 };
-MONTHS_MAP.nov = 10;
 
 function parseNigerianDate(dateStr: string): number | null {
   const dmyText = dateStr.match(
@@ -88,15 +82,12 @@ export async function parseStatementPdf(
     onProgress?.(pageNum, numPages, `Reading PDF page ${pageNum} of ${numPages} locally...`);
     const page = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
-
     const items = (textContent.items as any[]).filter((item) => item && typeof item.str === 'string');
 
     items.sort((a, b) => {
       const yA = a.transform ? a.transform[5] : 0;
       const yB = b.transform ? b.transform[5] : 0;
-      if (Math.abs(yA - yB) > 4) {
-        return yB - yA;
-      }
+      if (Math.abs(yA - yB) > 4) return yB - yA;
       const xA = a.transform ? a.transform[4] : 0;
       const xB = b.transform ? b.transform[4] : 0;
       return xA - xB;
@@ -122,13 +113,10 @@ export async function parseStatementPdf(
     if (currentLine.length > 0) {
       allPageLines.push(currentLine.join(' '));
     }
-
     fullDocumentText += '\n' + allPageLines.join('\n');
   }
 
   const bankName = identifyBankName(file.name, fullDocumentText.slice(0, 1500));
-
-  // Detect Account Holder Name (e.g. "BLESSING BUKOLA AZETA") to auto-detect self transfers
   const acctNameMatch = fullDocumentText.match(/Account\s*Name\s*[:\-]?\s*([A-Z\s]{5,40})/i);
   const accountHolderTokens = acctNameMatch
     ? acctNameMatch[1]
@@ -138,7 +126,6 @@ export async function parseStatementPdf(
     : [];
 
   const joinedText = allPageLines.join('\n');
-
   const txBlocks = joinedText.split(
     /(?=\b[0-3]?[0-9]\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20[2-3][0-9]\s+[0-2]?[0-9]:[0-5][0-9]:[0-5][0-9]\b|\b[0-3]?[0-9][\/\-](?:[0-1]?[0-9]|[A-Za-z]{3})[\/\-]20[2-3][0-9]\b)/i
   );
@@ -152,12 +139,7 @@ export async function parseStatementPdf(
     if (block.length < 15) continue;
 
     const timestamp = parseNigerianDate(block);
-    if (!timestamp) continue;
-
-    // Skip OPay internal OWealth mirror rows
-    if (isOpayInternalMirrorRow(block)) {
-      continue;
-    }
+    if (!timestamp || isOpayInternalMirrorRow(block)) continue;
 
     const lowerBlock = block.toLowerCase();
     let amount = 0;
@@ -179,18 +161,14 @@ export async function parseStatementPdf(
       const nonZero = moneyMatches.filter((n) => n > 0);
       if (nonZero.length === 0) continue;
       amount = nonZero[0];
-
-      if (
+      type =
         lowerBlock.includes('transfer from') ||
         lowerBlock.includes('deposit') ||
         lowerBlock.includes('cr ') ||
         lowerBlock.includes('credit') ||
         lowerBlock.includes('owealth interest')
-      ) {
-        type = 'CREDIT';
-      } else {
-        type = 'DEBIT';
-      }
+          ? 'CREDIT'
+          : 'DEBIT';
     }
 
     if (!amount || amount <= 0) continue;
@@ -204,6 +182,51 @@ export async function parseStatementPdf(
 
     narration = narration
       .split(/\s+(?:--\s+[0-9]|[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}\s+--|[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}\s+[0-9])/)[0]
+      .trim()
+      .replace(/\|\s*[0-9*]{6,}\b/g, '')
+      .replace(/\s*\|\s*/g, ' - ')
+      .replace(/\s+/g, ' ')
       .trim();
 
-    nar
+    if (!narration || narration.length < 2) {
+      narration = type === 'CREDIT' ? 'Account Inflow' : 'Account Spend';
+    }
+    if (narration.length > 75) {
+      narration = narration.slice(0, 75).trim();
+    }
+    if (isOpayInternalMirrorRow(narration)) continue;
+
+    let category: CategoryKey = matchCategoryFromNarration(narration);
+    const narrLower = narration.toLowerCase();
+    const matchedOwnNameCount = accountHolderTokens.filter((tok) => narrLower.includes(tok)).length;
+    if (matchedOwnNameCount >= 2) {
+      category = 'SELF_TRANSFER' as CategoryKey;
+    }
+
+    if (type === 'CREDIT') totalCredits += amount;
+    else totalDebits += amount;
+
+    const hash = generateSimpleHash(bankName, amount, type, timestamp, narration);
+
+    transactions.push({
+      amount,
+      type,
+      category,
+      narration,
+      bankName,
+      source: 'STATEMENT',
+      timestamp,
+      reflection: null,
+      deduplicationHash: hash
+    });
+  }
+
+  return {
+    bankName,
+    fileName: file.name,
+    transactions,
+    totalCredits,
+    totalDebits
+  };
+}
+// END OF FILE
