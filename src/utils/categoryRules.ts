@@ -47,7 +47,11 @@ export function cleanPatternText(text: string): string {
     );
   }
 
-  // 2. Strip leading or embedded reference numbers & account numbers (6+ digits)
+  // 2. Strip Nigerian phone numbers and NUBAN account numbers
+  cleaned = cleaned.replace(/(?:\+?234|0)[789][01]\d{8}\b/g, ' ');
+  cleaned = cleaned.replace(/\b\d{10,11}\b/g, ' ');
+
+  // 3. Strip leading or embedded reference numbers & account numbers (6+ digits)
   cleaned = cleaned.replace(/\b\d{6,}\b/g, ' ');
 
   // 3. Strip masked card numbers (e.g. 5399****1234 or 5399...1234)
@@ -196,24 +200,24 @@ export const DEFAULT_CATEGORY_RULES: Array<{ merchantPattern: string; category: 
   { merchantPattern: 'black tax', category: 'FAMILY' },
 
   // Health & Personal Care
-  { merchantPattern: 'pharmacy', category: 'HEALTH' },
-  { merchantPattern: 'medplus', category: 'HEALTH' },
-  { merchantPattern: 'healthplus', category: 'HEALTH' },
-  { merchantPattern: 'hospital', category: 'HEALTH' },
-  { merchantPattern: 'clinic', category: 'HEALTH' },
-  { merchantPattern: 'gym', category: 'HEALTH' },
-  { merchantPattern: 'fitness', category: 'HEALTH' },
-  { merchantPattern: 'salon', category: 'HEALTH' },
-  { merchantPattern: 'barber', category: 'HEALTH' },
+  { merchantPattern: 'pharmacy', category: 'HEALTH_CARE' },
+  { merchantPattern: 'medplus', category: 'HEALTH_CARE' },
+  { merchantPattern: 'healthplus', category: 'HEALTH_CARE' },
+  { merchantPattern: 'hospital', category: 'HEALTH_CARE' },
+  { merchantPattern: 'clinic', category: 'HEALTH_CARE' },
+  { merchantPattern: 'gym', category: 'HEALTH_CARE' },
+  { merchantPattern: 'fitness', category: 'HEALTH_CARE' },
+  { merchantPattern: 'salon', category: 'HEALTH_CARE' },
+  { merchantPattern: 'barber', category: 'HEALTH_CARE' },
 
   // Lifestyle & Outings
-  { merchantPattern: 'netflix', category: 'ENTERTAINMENT' },
-  { merchantPattern: 'spotify', category: 'ENTERTAINMENT' },
-  { merchantPattern: 'dstv', category: 'ENTERTAINMENT' },
-  { merchantPattern: 'gotv', category: 'ENTERTAINMENT' },
-  { merchantPattern: 'showmax', category: 'ENTERTAINMENT' },
-  { merchantPattern: 'cinema', category: 'ENTERTAINMENT' },
-  { merchantPattern: 'filmhouse', category: 'ENTERTAINMENT' },
+  { merchantPattern: 'netflix', category: 'LIFESTYLE' },
+  { merchantPattern: 'spotify', category: 'LIFESTYLE' },
+  { merchantPattern: 'dstv', category: 'LIFESTYLE' },
+  { merchantPattern: 'gotv', category: 'LIFESTYLE' },
+  { merchantPattern: 'showmax', category: 'LIFESTYLE' },
+  { merchantPattern: 'cinema', category: 'LIFESTYLE' },
+  { merchantPattern: 'filmhouse', category: 'LIFESTYLE' },
 
   // Shopping & Gadgets
   { merchantPattern: 'jumia', category: 'SHOPPING' },
@@ -224,20 +228,21 @@ export const DEFAULT_CATEGORY_RULES: Array<{ merchantPattern: string; category: 
   { merchantPattern: 'pointek', category: 'SHOPPING' },
 
   // Tithe, Offering & Charity
-  { merchantPattern: 'tithe', category: 'GIFTS_DONATIONS' },
-  { merchantPattern: 'offering', category: 'GIFTS_DONATIONS' },
-  { merchantPattern: 'church', category: 'GIFTS_DONATIONS' },
-  { merchantPattern: 'mosque', category: 'GIFTS_DONATIONS' },
-  { merchantPattern: 'zakat', category: 'GIFTS_DONATIONS' },
-  { merchantPattern: 'charity', category: 'GIFTS_DONATIONS' },
+  { merchantPattern: 'tithe', category: 'GIVING_FAITH' },
+  { merchantPattern: 'offering', category: 'GIVING_FAITH' },
+  { merchantPattern: 'church', category: 'GIVING_FAITH' },
+  { merchantPattern: 'mosque', category: 'GIVING_FAITH' },
+  { merchantPattern: 'zakat', category: 'GIVING_FAITH' },
+  { merchantPattern: 'charity', category: 'GIVING_FAITH' },
 
   // Savings & Investments
-  { merchantPattern: 'piggyvest', category: 'INVESTMENT' },
-  { merchantPattern: 'cowrywise', category: 'INVESTMENT' },
-  { merchantPattern: 'bamboo', category: 'INVESTMENT' },
-  { merchantPattern: 'risevest', category: 'INVESTMENT' },
-  { merchantPattern: 'trove', category: 'INVESTMENT' },
-  { merchantPattern: 'chaka', category: 'INVESTMENT' },
+  { merchantPattern: 'piggyvest', category: 'SAVINGS_INVEST' },
+  { merchantPattern: 'cowrywise', category: 'SAVINGS_INVEST' },
+  { merchantPattern: 'bamboo', category: 'SAVINGS_INVEST' },
+  { merchantPattern: 'risevest', category: 'SAVINGS_INVEST' },
+  { merchantPattern: 'trove', category: 'SAVINGS_INVEST' },
+  { merchantPattern: 'chaka', category: 'SAVINGS_INVEST' },
+  { merchantPattern: 'owealth save', category: 'SAVINGS_INVEST' },
 
   // Education & Courses
   { merchantPattern: 'school fees', category: 'EDUCATION' },
@@ -248,19 +253,29 @@ export const DEFAULT_CATEGORY_RULES: Array<{ merchantPattern: string; category: 
   { merchantPattern: 'exam', category: 'EDUCATION' },
 
   // Bank & POS Charges
-  { merchantPattern: 'stamp duty', category: 'FEES_TAXES' },
-  { merchantPattern: 'sms charge', category: 'FEES_TAXES' },
-  { merchantPattern: 'card maintenance', category: 'FEES_TAXES' },
-  { merchantPattern: 'vat', category: 'FEES_TAXES' },
-  { merchantPattern: 'transfer fee', category: 'FEES_TAXES' },
-  { merchantPattern: 'pos charge', category: 'FEES_TAXES' },
-  { merchantPattern: 'emt levy', category: 'FEES_TAXES' },
+  { merchantPattern: 'stamp duty', category: 'BANK_CHARGES' },
+  { merchantPattern: 'sms alert fee', category: 'BANK_CHARGES' },
+  { merchantPattern: 'sms charge', category: 'BANK_CHARGES' },
+  { merchantPattern: 'card maintenance', category: 'BANK_CHARGES' },
+  { merchantPattern: 'vat', category: 'BANK_CHARGES' },
+  { merchantPattern: 'transfer fee', category: 'BANK_CHARGES' },
+  { merchantPattern: 'pos charge', category: 'BANK_CHARGES' },
+  { merchantPattern: 'emt levy', category: 'BANK_CHARGES' },
+  { merchantPattern: 'nip fee', category: 'BANK_CHARGES' },
 
   // Business & Work
   { merchantPattern: 'inventory', category: 'BUSINESS' },
   { merchantPattern: 'supplier', category: 'BUSINESS' },
   { merchantPattern: 'pos settlement', category: 'BUSINESS' },
-  { merchantPattern: 'invoice', category: 'BUSINESS' }
+  { merchantPattern: 'invoice', category: 'BUSINESS' },
+
+  // Internal / Self Transfer
+  { merchantPattern: 'self transfer', category: 'SELF_TRANSFER' },
+  { merchantPattern: 'trf to self', category: 'SELF_TRANSFER' },
+  { merchantPattern: 'own account', category: 'SELF_TRANSFER' },
+  { merchantPattern: 'to my kuda', category: 'SELF_TRANSFER' },
+  { merchantPattern: 'to my opay', category: 'SELF_TRANSFER' },
+  { merchantPattern: 'internal transfer', category: 'SELF_TRANSFER' }
 ];
 
 export function resetCategoryRulesToDefault(): CategoryRule[] {

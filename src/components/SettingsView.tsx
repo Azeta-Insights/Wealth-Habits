@@ -19,7 +19,7 @@ import {
   Sparkles,
   Tag
 } from 'lucide-react';
-import { CategoryKey, TRANSACTION_CATEGORIES, TransactionEntity, UserProfile } from '../types';
+import { CategoryKey, PRIMARY_CATEGORY_KEYS, TRANSACTION_CATEGORIES, TransactionEntity, UserProfile } from '../types';
 import {
   isPinLockEnabled,
   enablePinLock,
@@ -685,11 +685,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     className="px-3.5 py-2 rounded-xl border border-[#D5CBBF] text-xs bg-white text-[#233227] focus:outline-none"
                   >
                     <optgroup label="Standard Categories">
-                      {Object.entries(TRANSACTION_CATEGORIES).map(([k, c]) => (
-                        <option key={k} value={k}>
-                          {c.emoji} {c.displayName}
-                        </option>
-                      ))}
+                      {PRIMARY_CATEGORY_KEYS.map((k) => {
+                        const c = TRANSACTION_CATEGORIES[k];
+                        return (
+                          <option key={k} value={k}>
+                            {c.emoji} {c.displayName}
+                          </option>
+                        );
+                      })}
                     </optgroup>
                     {customCategories.length > 0 && (
                       <optgroup label="Custom Categories">

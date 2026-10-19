@@ -31,18 +31,18 @@ const BANK_FEE_PATTERNS = [
 
 // Popular Subscriptions in Nigeria
 const KNOWN_SUBSCRIPTIONS = [
-  { name: 'Netflix', regex: /netflix/i, category: 'ENTERTAINMENT' },
-  { name: 'Spotify', regex: /spotify/i, category: 'ENTERTAINMENT' },
-  { name: 'Apple / iCloud', regex: /apple(?:\.com)?|itunes|icloud/i, category: 'ENTERTAINMENT' },
-  { name: 'YouTube Premium', regex: /youtube|google\s*storage|google\s*one/i, category: 'ENTERTAINMENT' },
-  { name: 'DStv / GOtv', regex: /dstv|gotv|multichoice/i, category: 'ENTERTAINMENT' },
-  { name: 'Showmax', regex: /showmax/i, category: 'ENTERTAINMENT' },
+  { name: 'Netflix', regex: /netflix/i, category: 'LIFESTYLE' },
+  { name: 'Spotify', regex: /spotify/i, category: 'LIFESTYLE' },
+  { name: 'Apple / iCloud', regex: /apple(?:\.com)?|itunes|icloud/i, category: 'LIFESTYLE' },
+  { name: 'YouTube Premium', regex: /youtube|google\s*storage|google\s*one/i, category: 'LIFESTYLE' },
+  { name: 'DStv / GOtv', regex: /dstv|gotv|multichoice/i, category: 'LIFESTYLE' },
+  { name: 'Showmax', regex: /showmax/i, category: 'LIFESTYLE' },
   { name: 'MTN Data / Airtime Renewal', regex: /mtn\s*(?:data|vtu|airtime|bundle)/i, category: 'DATA_AIRTIME' },
   { name: 'Airtel Renewal', regex: /airtel\s*(?:data|vtu|bundle)/i, category: 'DATA_AIRTIME' },
   { name: 'Starlink Internet', regex: /starlink/i, category: 'DATA_AIRTIME' },
   { name: 'Spectranet / Smile / IPNX', regex: /spectranet|smile\s*telecom|ipnx/i, category: 'DATA_AIRTIME' },
   { name: 'ChatGPT / OpenAI', regex: /openai|chatgpt/i, category: 'BUSINESS' },
-  { name: 'Amazon Prime', regex: /amazon\s*prime|prime\s*video/i, category: 'ENTERTAINMENT' }
+  { name: 'Amazon Prime', regex: /amazon\s*prime|prime\s*video/i, category: 'LIFESTYLE' }
 ];
 
 /**
@@ -51,7 +51,7 @@ const KNOWN_SUBSCRIPTIONS = [
 export function detectRecurringCharges(
   transactions: TransactionEntity[]
 ): SubscriptionDetectionResult {
-  const debits = transactions.filter((t) => t.type === 'DEBIT');
+  const debits = transactions.filter((t) => t.type === 'DEBIT' && t.category !== 'SELF_TRANSFER');
   const now = Date.now();
   const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
 

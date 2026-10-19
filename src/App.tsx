@@ -243,6 +243,10 @@ export function App() {
     };
     updateTransactions([newTx, ...transactions]);
 
+    if (narration && narration.trim().length >= 3) {
+      learnCategoryRule(narration.trim(), category);
+    }
+
     if (auth.currentUser) {
       saveTransactionToFirestore(auth.currentUser.uid, newTx);
     }

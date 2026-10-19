@@ -38,12 +38,14 @@ export function generateInsights(
   const currentWeekStart = now - oneWeek;
   const priorWeekStart = now - 2 * oneWeek;
 
-  const debits = allTransactions.filter(t => t.type === 'DEBIT');
+  const debits = allTransactions.filter(t => t.type === 'DEBIT' && t.category !== 'SELF_TRANSFER');
   const currentWeekDebits = debits.filter(t => t.timestamp >= currentWeekStart && t.timestamp <= now);
   const priorWeekDebits = debits.filter(t => t.timestamp >= priorWeekStart && t.timestamp < currentWeekStart);
 
   // 1. CATEGORY WEEK-OVER-WEEK COMPARISONS (Changes >= 20% and >= ₦500)
-  const categoryKeys = Object.keys(TRANSACTION_CATEGORIES) as CategoryKey[];
+  const categoryKeys = (Object.keys(TRANSACTION_CATEGORIES) as CategoryKey[]).filter(
+    k => k !== 'SELF_TRANSFER' && k !== 'OTHER'
+  );
   for (const category of categoryKeys) {
     const categoryInfo = TRANSACTION_CATEGORIES[category];
     const currentSum = currentWeekDebits.filter(t => t.category === category).reduce((acc, t) => acc + t.amount, 0);
@@ -188,7 +190,9 @@ export function generateInsights(
 
   // 4. MONTHLY SUMMARY
   const thirtyDaysAgo = now - 30 * oneDay;
-  const currentMonthTxs = allTransactions.filter(t => t.timestamp >= thirtyDaysAgo && t.timestamp <= now);
+  const currentMonthTxs = allTransactions.filter(
+    t => t.timestamp >= thirtyDaysAgo && t.timestamp <= now && t.category !== 'SELF_TRANSFER'
+  );
 
   if (currentMonthTxs.length > 0) {
     const totalDebitsMonth = currentMonthTxs.filter(t => t.type === 'DEBIT').reduce((acc, t) => acc + t.amount, 0);

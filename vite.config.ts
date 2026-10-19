@@ -5,6 +5,94 @@ import { VitePWA } from 'vite-plugin-pwa';
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    {
+      name: 'vite-hmr-suppressor',
+      transformIndexHtml: {
+        order: 'pre',
+        handler() {
+          return [
+            {
+              tag: 'script',
+              injectTo: 'head-prepend',
+              children: `
+(function() {
+  if (typeof window === 'undefined') return;
+  const OrigWS = window.WebSocket;
+  if (OrigWS) {
+    class FakeHmrSocket extends EventTarget {
+      constructor() {
+        super();
+        this.readyState = 1;
+        this.OPEN = 1;
+        this.CLOSED = 3;
+        this.CLOSING = 2;
+        this.CONNECTING = 0;
+        this.binaryType = 'blob';
+        this.bufferedAmount = 0;
+        this.extensions = '';
+        this.protocol = 'vite-hmr';
+        this.url = '';
+        this.onopen = null;
+        this.onclose = null;
+        this.onerror = null;
+        this.onmessage = null;
+      }
+      send() {}
+      close() { this.readyState = 3; }
+    }
+    FakeHmrSocket.CONNECTING = 0;
+    FakeHmrSocket.OPEN = 1;
+    FakeHmrSocket.CLOSING = 2;
+    FakeHmrSocket.CLOSED = 3;
+
+    window.WebSocket = function(url, protocols) {
+      if (
+        protocols === 'vite-hmr' ||
+        (Array.isArray(protocols) && protocols.includes('vite-hmr')) ||
+        (typeof url === 'string' && (url.includes('vite-hmr') || url.includes('token=')))
+      ) {
+        const sock = new FakeHmrSocket();
+        sock.url = String(url || '');
+        return sock;
+      }
+      return new OrigWS(url, protocols);
+    };
+    window.WebSocket.CONNECTING = 0;
+    window.WebSocket.OPEN = 1;
+    window.WebSocket.CLOSING = 2;
+    window.WebSocket.CLOSED = 3;
+    window.WebSocket.prototype = OrigWS.prototype;
+  }
+
+  const _origConsoleError = console.error;
+  console.error = function(...args) {
+    const str = args.map(a => (a && (a.stack || a.message)) || String(a)).join(' ');
+    if (str.includes('WebSocket') && (str.includes('[vite]') || str.includes('closed without opened'))) {
+      return;
+    }
+    _origConsoleError.apply(console, args);
+  };
+  window.addEventListener('error', function(e) {
+    const msg = (e && (e.message || (e.error && (e.error.message || e.error.stack)))) || '';
+    if (msg.includes('WebSocket') && (msg.includes('closed without opened') || msg.includes('[vite]'))) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }
+  }, true);
+  window.addEventListener('unhandledrejection', function(e) {
+    const reason = (e && (e.reason?.message || e.reason?.stack || String(e.reason))) || '';
+    if (reason.includes('WebSocket') && (reason.includes('closed without opened') || reason.includes('[vite]'))) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }
+  }, true);
+})();
+`
+            }
+          ];
+        }
+      }
+    },
     react(),
     VitePWA({
       registerType: 'autoUpdate',

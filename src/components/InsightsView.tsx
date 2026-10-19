@@ -48,8 +48,8 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
     return detectRecurringCharges(allTransactions);
   }, [allTransactions]);
 
-  const debits = allTransactions.filter(t => t.type === 'DEBIT');
-  const credits = allTransactions.filter(t => t.type === 'CREDIT');
+  const debits = allTransactions.filter(t => t.type === 'DEBIT' && t.category !== 'SELF_TRANSFER');
+  const credits = allTransactions.filter(t => t.type === 'CREDIT' && t.category !== 'SELF_TRANSFER');
 
   const totalSpent = debits.reduce((acc, t) => acc + t.amount, 0);
   const totalInflow = credits.reduce((acc, t) => acc + t.amount, 0);

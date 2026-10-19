@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import {
   CategoryKey,
+  PRIMARY_CATEGORY_KEYS,
   StatementParseResult,
   TRANSACTION_CATEGORIES,
   TransactionEntity,
@@ -475,11 +476,14 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
                             className="text-[11px] font-medium bg-white border border-[#D5CBBF] rounded-lg px-2 py-1 text-[#233227] focus:outline-none"
                           >
                             <optgroup label="Standard Categories">
-                              {Object.entries(TRANSACTION_CATEGORIES).map(([k, c]) => (
-                                <option key={k} value={k}>
-                                  {c.emoji} {c.displayName}
-                                </option>
-                              ))}
+                              {PRIMARY_CATEGORY_KEYS.map((k) => {
+                                const c = TRANSACTION_CATEGORIES[k];
+                                return (
+                                  <option key={k} value={k}>
+                                    {c.emoji} {c.displayName}
+                                  </option>
+                                );
+                              })}
                             </optgroup>
                             {customCats.length > 0 && (
                               <optgroup label="Custom Categories">
@@ -837,21 +841,24 @@ export const AddImportView: React.FC<AddImportViewProps> = ({
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-80 overflow-y-auto pr-1">
-              {Object.entries(TRANSACTION_CATEGORIES).map(([key, cat]) => (
-                <button
-                  type="button"
-                  key={key}
-                  onClick={() => setSelectedCategory(key as CategoryKey)}
-                  className={`p-3.5 rounded-2xl border text-left flex items-center space-x-2.5 transition-all ${
-                    selectedCategory === key
-                      ? 'bg-[#E4ECE4] border-[#3D5A45] ring-1 ring-[#3D5A45] text-[#233227]'
-                      : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#636C62] hover:bg-[#EFE9DE]'
-                  }`}
-                >
-                  <span className="text-2xl">{cat.emoji}</span>
-                  <span className="text-xs font-semibold leading-tight">{cat.displayName}</span>
-                </button>
-              ))}
+              {PRIMARY_CATEGORY_KEYS.map((key) => {
+                const cat = TRANSACTION_CATEGORIES[key];
+                return (
+                  <button
+                    type="button"
+                    key={key}
+                    onClick={() => setSelectedCategory(key as CategoryKey)}
+                    className={`p-3.5 rounded-2xl border text-left flex items-center space-x-2.5 transition-all ${
+                      selectedCategory === key
+                        ? 'bg-[#E4ECE4] border-[#3D5A45] ring-1 ring-[#3D5A45] text-[#233227]'
+                        : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#636C62] hover:bg-[#EFE9DE]'
+                    }`}
+                  >
+                    <span className="text-2xl">{cat.emoji}</span>
+                    <span className="text-xs font-semibold leading-tight">{cat.displayName}</span>
+                  </button>
+                );
+              })}
 
               {getCustomCategories().map((cat) => (
                 <button

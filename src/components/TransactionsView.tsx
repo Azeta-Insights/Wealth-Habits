@@ -14,7 +14,7 @@ import {
   Layers,
   Sparkles
 } from 'lucide-react';
-import { CategoryKey, ReflectionType, TRANSACTION_CATEGORIES, TransactionEntity } from '../types';
+import { CategoryKey, PRIMARY_CATEGORY_KEYS, ReflectionType, TRANSACTION_CATEGORIES, TransactionEntity } from '../types';
 import { formatNaira } from '../utils/insightEngine';
 import { learnCategoryRule } from '../utils/categoryRules';
 import { getCustomCategories, getCategoryDisplay } from '../utils/customCategories';
@@ -137,10 +137,10 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   const hasMore = visibleCount < sortedTransactions.length;
 
   const totalInflow = filteredTransactions
-    .filter((t) => t.type === 'CREDIT')
+    .filter((t) => t.type === 'CREDIT' && t.category !== 'SELF_TRANSFER')
     .reduce((sum, t) => sum + t.amount, 0);
   const totalOutflow = filteredTransactions
-    .filter((t) => t.type === 'DEBIT')
+    .filter((t) => t.type === 'DEBIT' && t.category !== 'SELF_TRANSFER')
     .reduce((sum, t) => sum + t.amount, 0);
   const netDiff = totalInflow - totalOutflow;
   const categorizedCount = filteredTransactions.filter((t) => t.category !== 'OTHER').length;
@@ -332,20 +332,23 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
             All Categories
           </button>
 
-          {Object.entries(TRANSACTION_CATEGORIES).map(([key, cat]) => (
-            <button
-              key={key}
-              onClick={() => setSelectedCategory(key)}
-              className={`px-3 py-1.5 rounded-full font-medium whitespace-nowrap flex items-center space-x-1 transition-all border ${
-                selectedCategory === key
-                  ? 'bg-[#3D5A45] text-white border-[#3D5A45]'
-                  : 'bg-[#FAF7F2] text-[#636C62] border-[#E8E2D9] hover:bg-[#EFE9DE]'
-              }`}
-            >
-              <span>{cat.emoji}</span>
-              <span>{cat.displayName}</span>
-            </button>
-          ))}
+          {PRIMARY_CATEGORY_KEYS.map((key) => {
+            const cat = TRANSACTION_CATEGORIES[key];
+            return (
+              <button
+                key={key}
+                onClick={() => setSelectedCategory(key)}
+                className={`px-3 py-1.5 rounded-full font-medium whitespace-nowrap flex items-center space-x-1 transition-all border ${
+                  selectedCategory === key
+                    ? 'bg-[#3D5A45] text-white border-[#3D5A45]'
+                    : 'bg-[#FAF7F2] text-[#636C62] border-[#E8E2D9] hover:bg-[#EFE9DE]'
+                }`}
+              >
+                <span>{cat.emoji}</span>
+                <span>{cat.displayName}</span>
+              </button>
+            );
+          })}
 
           {getCustomCategories().map((cat) => (
             <button
@@ -493,11 +496,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                           className="text-[11px] font-semibold bg-white border border-[#3D5A45] rounded px-1 py-0.5 text-[#233227] focus:outline-none"
                         >
                           <optgroup label="Standard Categories">
-                            {Object.entries(TRANSACTION_CATEGORIES).map(([key, cat]) => (
-                              <option key={key} value={key}>
-                                {cat.emoji} {cat.displayName}
-                              </option>
-                            ))}
+                            {PRIMARY_CATEGORY_KEYS.map((key) => {
+                              const cat = TRANSACTION_CATEGORIES[key];
+                              return (
+                                <option key={key} value={key}>
+                                  {cat.emoji} {cat.displayName}
+                                </option>
+                              );
+                            })}
                           </optgroup>
                           {customCategories.length > 0 && (
                             <optgroup label="Custom Categories">

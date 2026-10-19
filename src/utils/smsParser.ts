@@ -28,7 +28,7 @@ export const BANK_RULES: BankSenderRule[] = [
  * 3. Expanded 15-category Nigerian keyword lists
  * 4. Fallback: Default to 'OTHER'
  */
-export function matchCategoryFromNarration(narration: string): CategoryKey {
+export function matchCategoryFromNarration(narration: string, userName?: string | null): CategoryKey {
   if (!narration || !narration.trim()) return 'OTHER';
 
   // 1. First Priority: Check user-learned merchant patterns
@@ -43,8 +43,17 @@ export function matchCategoryFromNarration(narration: string): CategoryKey {
     return customCat as CategoryKey;
   }
 
-  // 3. Third Priority: Check expanded 15-category Nigerian keywords
   const lower = narration.toLowerCase();
+
+  // If user's name is known and appears in narration alongside transfer/to, treat as SELF_TRANSFER
+  if (userName && userName.trim().length >= 3) {
+    const lowerName = userName.trim().toLowerCase();
+    if (lower.includes(lowerName) && (lower.includes('trf') || lower.includes('transfer') || lower.includes('to '))) {
+      return 'SELF_TRANSFER';
+    }
+  }
+
+  // 3. Third Priority: Check expanded 16-category Nigerian keywords
   for (const [key, category] of Object.entries(TRANSACTION_CATEGORIES)) {
     if (key === 'OTHER') continue;
     for (const keyword of category.keywords) {

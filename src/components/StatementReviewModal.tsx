@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
-import { CategoryKey, StatementParseResult, TRANSACTION_CATEGORIES, TransactionEntity } from '../types';
+import { CategoryKey, PRIMARY_CATEGORY_KEYS, StatementParseResult, TRANSACTION_CATEGORIES, TransactionEntity } from '../types';
 import { formatNaira } from '../utils/insightEngine';
 import { learnCategoryRule } from '../utils/categoryRules';
 import { getCustomCategories, getCategoryDisplay } from '../utils/customCategories';
@@ -38,6 +38,13 @@ export const StatementReviewModal: React.FC<StatementReviewModalProps> = ({
     setItems(items.filter((_, i) => i !== index));
   };
 
+  const computedDebits = items
+    .filter((t) => t.type === 'DEBIT' && t.category !== 'SELF_TRANSFER')
+    .reduce((sum, t) => sum + t.amount, 0);
+  const computedCredits = items
+    .filter((t) => t.type === 'CREDIT' && t.category !== 'SELF_TRANSFER')
+    .reduce((sum, t) => sum + t.amount, 0);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-xl border border-[#E8E2D9] max-h-[90vh] flex flex-col">
@@ -73,11 +80,11 @@ export const StatementReviewModal: React.FC<StatementReviewModalProps> = ({
           </div>
           <div className="bg-[#FAF7F2] p-3 rounded-xl border border-[#EFE9DE]">
             <p className="text-[10px] uppercase font-bold text-[#8A9588]">Total Debits</p>
-            <p className="text-sm font-bold text-[#233227]">{formatNaira(result.totalDebits)}</p>
+            <p className="text-sm font-bold text-[#233227]">{formatNaira(computedDebits)}</p>
           </div>
           <div className="bg-[#FAF7F2] p-3 rounded-xl border border-[#EFE9DE]">
             <p className="text-[10px] uppercase font-bold text-[#8A9588]">Total Credits</p>
-            <p className="text-sm font-bold text-[#20603D]">{formatNaira(result.totalCredits)}</p>
+            <p className="text-sm font-bold text-[#20603D]">{formatNaira(computedCredits)}</p>
           </div>
         </div>
 
@@ -110,11 +117,14 @@ export const StatementReviewModal: React.FC<StatementReviewModalProps> = ({
                   className="text-[11px] font-medium bg-white border border-[#D5CBBF] rounded-lg px-2 py-1 text-[#233227] focus:outline-none"
                 >
                   <optgroup label="Standard Categories">
-                    {Object.entries(TRANSACTION_CATEGORIES).map(([k, c]) => (
-                      <option key={k} value={k}>
-                        {c.emoji} {c.displayName}
-                      </option>
-                    ))}
+                    {PRIMARY_CATEGORY_KEYS.map((k) => {
+                      const c = TRANSACTION_CATEGORIES[k];
+                      return (
+                        <option key={k} value={k}>
+                          {c.emoji} {c.displayName}
+                        </option>
+                      );
+                    })}
                   </optgroup>
                   {customCategories.length > 0 && (
                     <optgroup label="Custom Categories">
