@@ -84,6 +84,7 @@ export async function parseStatementPdf(
     const textContent = await page.getTextContent();
     const items = (textContent.items as any[]).filter((item) => item && typeof item.str === 'string');
 
+    // Sort items top-to-bottom, left-to-right
     items.sort((a, b) => {
       const yA = a.transform ? a.transform[5] : 0;
       const yB = b.transform ? b.transform[5] : 0;
@@ -116,7 +117,9 @@ export async function parseStatementPdf(
     fullDocumentText += '\n' + allPageLines.join('\n');
   }
 
-  const bankName = identifyBankName(file.name, fullDocumentText.slice(0, 1500));
+  // Correctly identify bank name by passing both filename and full text
+  const bankName = identifyBankName(file.name, fullDocumentText);
+
   const acctNameMatch = fullDocumentText.match(/Account\s*Name\s*[:\-]?\s*([A-Z\s]{5,40})/i);
   const accountHolderTokens = acctNameMatch
     ? acctNameMatch[1]
@@ -173,18 +176,26 @@ export async function parseStatementPdf(
 
     if (!amount || amount <= 0) continue;
 
+    // Clean narration: strip leading dates, timestamps, and trailing reference numbers
     let narration = block
       .replace(
         /^[0-3]?[0-9]\s+[A-Za-z]{3,9}\s+20[2-3][0-9]\s+[0-2]?[0-9]:[0-5][0-9]:[0-5][0-9]\s+[0-3]?[0-9]\s+[A-Za-z]{3,9}\s+20[2-3][0-9]\s*/i,
         ''
       )
-      .replace(/^[0-3]?[0-9][\/\-][0-9A-Za-z]{2,3}[\/\-]20[2-3][0-9]\s*/i, '');
+      .replace(/^[0-3]?[0-9][\/\-][0-9A-Za-z]{2,3}[\/\-]20[2-3][0-9]\s*/i, '')
+      // Remove leading account number or mobile tags if attached
+      .replace(/^[0-9*]+\s*\|\s*/, '');
 
+    // Cut off from amount column onwards
     narration = narration
       .split(/\s+(?:--\s+[0-9]|[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}\s+--|[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}\s+[0-9])/)[0]
-      .trim()
-      .replace(/\|\s*[0-9*]{6,}\b/g, '')
-      .replace(/\s*\|\s*/g, ' - ')
+      .trim();
+
+    // Strip trailing long reference numbers (e.g. 2610185501...)
+    narration = narration
+      .replace(/\s+\|\s+[0-9]{15,}\b/g, '')
+      .replace(/\s+MOBILE\s+[0-9]{10,}\b/i, '')
+      .replace(/\s+WEB\s+[0-9]{10,}\b/i, '')
       .replace(/\s+/g, ' ')
       .trim();
 
@@ -197,6 +208,12 @@ export async function parseStatementPdf(
     if (isOpayInternalMirrorRow(narration)) continue;
 
     let category: CategoryKey = matchCategoryFromNarration(narration);
+
+    // Prevent false triggers on Power/Fuel for outward transfers
+    if (category === 'POWER_FUEL' && (narration.toLowerCase().includes('transfer') || narration.toLowerCase().includes('nip'))) {
+      category = 'OTHER';
+    }
+
     const narrLower = narration.toLowerCase();
     const matchedOwnNameCount = accountHolderTokens.filter((tok) => narrLower.includes(tok)).length;
     if (matchedOwnNameCount >= 2) {
