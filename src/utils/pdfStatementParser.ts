@@ -84,7 +84,6 @@ export async function parseStatementPdf(
     const textContent = await page.getTextContent();
     const items = (textContent.items as any[]).filter((item) => item && typeof item.str === 'string');
 
-    // Sort items top-to-bottom, left-to-right
     items.sort((a, b) => {
       const yA = a.transform ? a.transform[5] : 0;
       const yB = b.transform ? b.transform[5] : 0;
@@ -117,7 +116,6 @@ export async function parseStatementPdf(
     fullDocumentText += '\n' + allPageLines.join('\n');
   }
 
-  // Correctly identify bank name by passing both filename and full text
   const bankName = identifyBankName(file.name, fullDocumentText);
 
   const acctNameMatch = fullDocumentText.match(/Account\s*Name\s*[:\-]?\s*([A-Z\s]{5,40})/i);
@@ -130,7 +128,7 @@ export async function parseStatementPdf(
 
   const joinedText = allPageLines.join('\n');
   const txBlocks = joinedText.split(
-    /(?=\b[0-3]?[0-9]\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20[2-3][0-9]\s+[0-2]?[0-9]:[0-5][0-9]:[0-5][0-9]\b|\b[0-3]?[0-9][\/\-](?:[0-1]?[0-9]|[A-Za-z]{3})[\/\-]20[2-3][0-9]\b)/i
+    /(?=\b[0-3]?[0-9]\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20[2-3][0-9]\b|\b[0-3]?[0-9][\/\-](?:[0-1]?[0-9]|[A-Za-z]{3})[\/\-]20[2-3][0-9]\b)/i
   );
 
   const transactions: Array<Omit<TransactionEntity, 'id'>> = [];
@@ -142,78 +140,65 @@ export async function parseStatementPdf(
     if (block.length < 15) continue;
 
     const timestamp = parseNigerianDate(block);
-    if (!timestamp || isOpayInternalMirrorRow(block)) continue;
+    if (!timestamp) continue;
+    if (bankName === 'OPay' && isOpayInternalMirrorRow(block)) continue;
 
     const lowerBlock = block.toLowerCase();
     let amount = 0;
     let type: TransactionType = 'DEBIT';
 
-    const opayDebitMatch = block.match(/([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\s+--\s+[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}/);
-    const opayCreditMatch = block.match(/--\s+([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\s+[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}/);
+    const moneyMatches = Array.from(block.matchAll(/\b([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\b/g)).map((m) =>
+      parseFloat(m[1].replace(/,/g, ''))
+    );
+    const nonZero = moneyMatches.filter((n) => n > 0 && n < 100000000);
 
-    if (opayDebitMatch) {
-      amount = parseFloat(opayDebitMatch[1].replace(/,/g, ''));
-      type = 'DEBIT';
-    } else if (opayCreditMatch) {
-      amount = parseFloat(opayCreditMatch[1].replace(/,/g, ''));
-      type = 'CREDIT';
+    if (nonZero.length === 0) continue;
+
+    if (bankName === 'OPay') {
+      const opayDebitMatch = block.match(/([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\s+--\s+[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}/);
+      const opayCreditMatch = block.match(/--\s+([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\s+[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}/);
+      if (opayDebitMatch) {
+        amount = parseFloat(opayDebitMatch[1].replace(/,/g, ''));
+        type = 'DEBIT';
+      } else if (opayCreditMatch) {
+        amount = parseFloat(opayCreditMatch[1].replace(/,/g, ''));
+        type = 'CREDIT';
+      } else {
+        amount = nonZero[0];
+        type = lowerBlock.includes('transfer from') || lowerBlock.includes('deposit') || lowerBlock.includes('cr ') || lowerBlock.includes('credit') ? 'CREDIT' : 'DEBIT';
+      }
     } else {
-      const moneyMatches = Array.from(block.matchAll(/\b([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\b/g)).map((m) =>
-        parseFloat(m[1].replace(/,/g, ''))
-      );
-      const nonZero = moneyMatches.filter((n) => n > 0);
-      if (nonZero.length === 0) continue;
       amount = nonZero[0];
-      type =
-        lowerBlock.includes('transfer from') ||
-        lowerBlock.includes('deposit') ||
-        lowerBlock.includes('cr ') ||
-        lowerBlock.includes('credit') ||
-        lowerBlock.includes('owealth interest')
-          ? 'CREDIT'
-          : 'DEBIT';
+      if (lowerBlock.includes('cr') || lowerBlock.includes('credit') || lowerBlock.includes('deposit') || lowerBlock.includes('reversal')) {
+        type = 'CREDIT';
+      } else {
+        type = 'DEBIT';
+      }
     }
 
     if (!amount || amount <= 0) continue;
 
-    // Clean narration: strip leading dates, timestamps, and trailing reference numbers
     let narration = block
-      .replace(
-        /^[0-3]?[0-9]\s+[A-Za-z]{3,9}\s+20[2-3][0-9]\s+[0-2]?[0-9]:[0-5][0-9]:[0-5][0-9]\s+[0-3]?[0-9]\s+[A-Za-z]{3,9}\s+20[2-3][0-9]\s*/i,
-        ''
-      )
+      .replace(/^[0-3]?[0-9]\s+[A-Za-z]{3,9}\s+20[2-3][0-9]\s*(?:[0-2]?[0-9]:[0-5][0-9](?::[0-5][0-9])?)?\s*/i, '')
       .replace(/^[0-3]?[0-9][\/\-][0-9A-Za-z]{2,3}[\/\-]20[2-3][0-9]\s*/i, '')
-      // Remove leading account number or mobile tags if attached
-      .replace(/^[0-9*]+\s*\|\s*/, '');
-
-    // Cut off from amount column onwards
-    narration = narration
-      .split(/\s+(?:--\s+[0-9]|[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}\s+--|[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}\s+[0-9])/)[0]
-      .trim();
-
-    // Strip trailing long reference numbers (e.g. 2610185501...)
-    narration = narration
-      .replace(/\s+\|\s+[0-9]{15,}\b/g, '')
-      .replace(/\s+MOBILE\s+[0-9]{10,}\b/i, '')
-      .replace(/\s+WEB\s+[0-9]{10,}\b/i, '')
+      .split(/\s+(?:--\s+[0-9]|[0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\b/)[0]
+      .replace(/\|\s*[0-9*]{6,}\b/g, '')
+      .replace(/\s*\|\s*/g, ' - ')
       .replace(/\s+/g, ' ')
       .trim();
 
-    if (!narration || narration.length < 2) {
-      narration = type === 'CREDIT' ? 'Account Inflow' : 'Account Spend';
+    // GUARD: If narration is just a raw monetary number or empty, discard or assign fallback
+    if (!narration || narration.length < 2 || /^[0-9,.]+$/.test(narration)) {
+      continue; // Skip orphan numeric lines
     }
+
     if (narration.length > 75) {
       narration = narration.slice(0, 75).trim();
     }
-    if (isOpayInternalMirrorRow(narration)) continue;
+
+    if (bankName === 'OPay' && isOpayInternalMirrorRow(narration)) continue;
 
     let category: CategoryKey = matchCategoryFromNarration(narration);
-
-    // Prevent false triggers on Power/Fuel for outward transfers
-    if (category === 'POWER_FUEL' && (narration.toLowerCase().includes('transfer') || narration.toLowerCase().includes('nip'))) {
-      category = 'OTHER';
-    }
-
     const narrLower = narration.toLowerCase();
     const matchedOwnNameCount = accountHolderTokens.filter((tok) => narrLower.includes(tok)).length;
     if (matchedOwnNameCount >= 2) {
