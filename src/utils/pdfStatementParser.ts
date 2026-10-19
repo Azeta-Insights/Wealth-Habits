@@ -15,6 +15,11 @@ export function isOpayInternalMirrorRow(text: string): boolean {
   if (!text) return false;
   const lower = text.toLowerCase().trim();
   return (
+    lower.includes('opening balance') ||
+    lower.includes('closing balance') ||
+    lower.includes('total debit') ||
+    lower.includes('total credit') ||
+    lower.includes('page ') ||
     lower.includes('owealth withdrawal(transaction payment)') ||
     lower.includes('owealth withdrawal (transaction payment)') ||
     lower === 'owealth withdrawal' ||
@@ -116,7 +121,11 @@ export async function parseStatementPdf(
     fullDocumentText += '\n' + allPageLines.join('\n');
   }
 
-  const bankName = identifyBankName(file.name, fullDocumentText);
+  // Force OPay recognition if OWealth or OPay appears in the text
+  let bankName = identifyBankName(file.name, fullDocumentText);
+  if (/opay|owealth/i.test(fullDocumentText) || /opay/i.test(file.name)) {
+    bankName = 'OPay';
+  }
 
   const acctNameMatch = fullDocumentText.match(/Account\s*Name\s*[:\-]?\s*([A-Z\s]{5,40})/i);
   const accountHolderTokens = acctNameMatch
@@ -139,11 +148,21 @@ export async function parseStatementPdf(
     const block = rawBlock.replace(/\s+/g, ' ').trim();
     if (block.length < 15) continue;
 
+    if (isOpayInternalMirrorRow(block)) continue;
+
     const timestamp = parseNigerianDate(block);
     if (!timestamp) continue;
-    if (bankName === 'OPay' && isOpayInternalMirrorRow(block)) continue;
 
     const lowerBlock = block.toLowerCase();
+    if (
+      lowerBlock.includes('opening balance') ||
+      lowerBlock.includes('closing balance') ||
+      lowerBlock.includes('total debit') ||
+      lowerBlock.includes('total credit')
+    ) {
+      continue;
+    }
+
     let amount = 0;
     let type: TransactionType = 'DEBIT';
 
@@ -165,15 +184,23 @@ export async function parseStatementPdf(
         type = 'CREDIT';
       } else {
         amount = nonZero[0];
-        type = lowerBlock.includes('transfer from') || lowerBlock.includes('deposit') || lowerBlock.includes('cr ') || lowerBlock.includes('credit') ? 'CREDIT' : 'DEBIT';
+        type =
+          lowerBlock.includes('transfer from') ||
+          lowerBlock.includes('deposit') ||
+          lowerBlock.includes('cr ') ||
+          lowerBlock.includes('credit')
+            ? 'CREDIT'
+            : 'DEBIT';
       }
     } else {
       amount = nonZero[0];
-      if (lowerBlock.includes('cr') || lowerBlock.includes('credit') || lowerBlock.includes('deposit') || lowerBlock.includes('reversal')) {
-        type = 'CREDIT';
-      } else {
-        type = 'DEBIT';
-      }
+      type =
+        lowerBlock.includes('cr') ||
+        lowerBlock.includes('credit') ||
+        lowerBlock.includes('deposit') ||
+        lowerBlock.includes('reversal')
+          ? 'CREDIT'
+          : 'DEBIT';
     }
 
     if (!amount || amount <= 0) continue;
@@ -187,16 +214,15 @@ export async function parseStatementPdf(
       .replace(/\s+/g, ' ')
       .trim();
 
-    // GUARD: If narration is just a raw monetary number or empty, discard or assign fallback
     if (!narration || narration.length < 2 || /^[0-9,.]+$/.test(narration)) {
-      continue; // Skip orphan numeric lines
+      continue;
     }
 
     if (narration.length > 75) {
       narration = narration.slice(0, 75).trim();
     }
 
-    if (bankName === 'OPay' && isOpayInternalMirrorRow(narration)) continue;
+    if (isOpayInternalMirrorRow(narration)) continue;
 
     let category: CategoryKey = matchCategoryFromNarration(narration);
     const narrLower = narration.toLowerCase();
