@@ -309,3 +309,75 @@ export async function saveReflectionToFirestore(
     );
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Subscribe to realtime transactions in Firestore with optional limit
+ */
+export function subscribeToUserTransactions(
+  userId: string,
+  onUpdate: (txs: TransactionEntity[]) => void,
+  maxLimit: number = 250
+): () => void {
+  if (!db) return () => {};
+  const txCollection = collection(db, 'users', userId, 'transactions');
+  const q = query(txCollection, orderBy('timestamp', 'desc'), limit(maxLimit));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const items: TransactionEntity[] = [];
+      snapshot.forEach((docSnap) => {
+        const d = docSnap.data();
+        items.push({
+          id: Number(d.id) || Date.now(),
+          amount: Number(d.amount) || 0,
+          type: d.type as 'DEBIT' | 'CREDIT',
+          category: d.category,
+          narration: d.narration || '',
+          bankName: d.bankName || null,
+          source: d.source || 'MANUAL',
+          timestamp: Number(d.timestamp) || Date.now(),
+          reflection: d.reflection || null
+        });
+      });
+      items.sort((a, b) => b.timestamp - a.timestamp);
+      onUpdate(items);
+    },
+    (_error) => {
+      if (!db) return;
+      const fallbackQ = query(txCollection, limit(maxLimit));
+      return onSnapshot(fallbackQ, (snapshot) => {
+        const items: TransactionEntity[] = [];
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data();
+          items.push({
+            id: Number(d.id) || Date.now(),
+            amount: Number(d.amount) || 0,
+            type: d.type as 'DEBIT' | 'CREDIT',
+            category: d.category,
+            narration: d.narration || '',
+            bankName: d.bankName || null,
+            source: d.source || 'MANUAL',
+            timestamp: Number(d.timestamp) || Date.now(),
+            reflection: d.reflection || null
+          });
+        });
+        items.sort((a, b) => b.timestamp - a.timestamp);
+        onUpdate(items);
+      });
+    }
+  );
+}
+
+/**
+ * Auth state listener
+ */
+export function onAuthUserChanged(callback: (user: User | null) => void): () => void {
+  if (!isFirebaseConfigured || !app) {
+    callback(null);
+    return () => {};
+  }
+  return onAuthStateChanged(auth, callback);
+}
