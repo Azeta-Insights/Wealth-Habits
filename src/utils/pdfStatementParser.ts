@@ -1,29 +1,45 @@
-import * as pdfjsLib from 'pdfjs-dist';
-// @ts-ignore - Vite bundles the worker URL cleanly using ?url
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { StatementParseResult } from '../types';
-import { parseStatementWithAiOcr } from './aiStatementParser';
+import { parseStatementWithAiOcr, isOpayInternalMirrorRow } from './aiStatementParser';
 
-try {
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    pdfWorkerUrl || `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-} catch {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-}
+export type PdfParseProgressCallback = (current: number, total: number, statusText: string) => void;
 
 /**
- * Universal PDF statement parser wrapper.
- * Instead of fragile regex parsing, this delegates directly to our text-based 
- * Gemini parser which reads the local PDF text, strips OPay mirror rows, and auto-categorizes.
+ * Re-export isOpayInternalMirrorRow so any caller or build script importing from
+ * pdfStatementParser builds cleanly with zero Rollup export errors.
+ */
+export { isOpayInternalMirrorRow };
+
+/**
+ * Clean wrapper that delegates PDF statement parsing directly to the
+ * hybrid text-first Gemini 3.8 Flash statement parser.
  */
 export async function parseStatementPdf(
   file: File,
   password?: string,
-  onProgress?: (currentPage: number, totalPages: number, status: string) => void
+  onProgress?: PdfParseProgressCallback
 ): Promise<StatementParseResult> {
-  // If password is required/provided, you can handle it or pass straight to AI OCR
-  return parseStatementWithAiOcr(file, (status) => {
-    onProgress?.(1, 1, status);
-  });
+  return parseStatementWithAiOcr(
+    file,
+    (statusText: string) => {
+      onProgress?.(1, 1, statusText);
+    },
+    password
+  );
 }
-// END OF FILE
+
+export function cleanPdfNarration(raw: string): string {
+  return raw
+    .replace(/^"+|"+$/g, '')
+    .replace(/TRF\s+TO\s+/i, 'Transfer to ')
+    .replace(/TRF\s+FROM\s+/i, 'Transfer from ')
+    .replace(/POS\s+PURCHASE\s+/i, 'POS: ')
+    .replace(/WEB\s+PURCHASE\s+/i, 'Web: ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .substring(0, 80);
+}
+
+export function parseFlexibleDate(dateStr: string): number {
+  const parsed = Date.parse(dateStr);
+  return !isNaN(parsed) ? parsed : Date.now();
+}

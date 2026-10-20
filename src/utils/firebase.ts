@@ -27,14 +27,14 @@ import {
 } from 'firebase/firestore';
 import { TransactionEntity, ReflectionType, UserProfile } from '../types';
 
-// Firebase client configuration loaded securely from Vite environment variables
+// Firebase client configuration loaded from Vite environment variables with production fallbacks
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyAdpjUFhzGEA4s_ktJG9cdHUhPVJXcACO0',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'wealthhabitsapp.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'wealthhabitsapp',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'wealthhabitsapp.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '270226524718',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:270226524718:web:8d4e112e844afc2738edbf'
 };
 
 // Initialize Firebase App singleton
