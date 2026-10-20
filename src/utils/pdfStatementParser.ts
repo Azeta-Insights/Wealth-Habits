@@ -12,3 +12,4 @@ export async function parseStatementPdf(
     onProgress?.(1, 1, status);
   }, password);
 }
+// END OF FILE

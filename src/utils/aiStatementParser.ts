@@ -3,12 +3,11 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { StatementParseResult, TransactionEntity, TransactionType, CategoryKey } from '../types';
 import { matchCategoryFromNarration, generateSimpleHash } from './smsParser';
 
-// Use a reliable public CDN worker URL for pdfjs-dist to eliminate Vercel asset 404 errors
+// Disable separate worker file requirement so it runs reliably on Vercel without 404 errors
 try {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-} catch {
-  // Fallback
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+} catch (e) {
+  console.warn('Could not disable PDF worker:', e);
 }
 
 export function isOpayInternalMirrorRow(text: string): boolean {
@@ -41,7 +40,7 @@ export async function parseStatementWithAiOcr(
 
   let fullText = '';
 
-  // 1. Try reading PDF text locally with pdfjs-dist
+  // 1. Try reading PDF text locally with pdfjs-dist (running synchronously without worker)
   try {
     const arrayBuffer = await file.arrayBuffer();
     const loadingTask = pdfjsLib.getDocument({
@@ -69,7 +68,6 @@ export async function parseStatementWithAiOcr(
 
   const ai = new GoogleGenAI({ apiKey });
 
-  // If local PDF text extraction failed or returned empty, fallback to sending file buffer directly
   let contentsPayload: any;
   if (fullText.trim().length > 50) {
     contentsPayload = [{ text: `You are an expert Nigerian bank statement parser. Extract all user transactions from this statement text:\n\n${fullText.slice(0, 30000)}` }];
@@ -112,7 +110,6 @@ export async function parseStatementWithAiOcr(
   Return the data strictly matching the requested JSON schema.
   `;
 
-  // Call gemini-3.8-flash with auto-retry for 503 errors
   let response: any = null;
   let attempts = 0;
   while (attempts < 3) {
@@ -149,7 +146,7 @@ export async function parseStatementWithAiOcr(
     } catch (err: any) {
       attempts++;
       if (attempts >= 3) throw err;
-      await new Promise((r) => setTimeout(r, 2000 * attempts)); // Wait before retry
+      await new Promise((r) => setTimeout(r, 2000 * attempts));
     }
   }
 
