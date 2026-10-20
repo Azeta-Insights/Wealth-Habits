@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   GoogleAuthProvider,
@@ -11,6 +11,7 @@ import {
   updateProfile,
   signOut,
   onAuthStateChanged,
+  Auth,
   User
 } from 'firebase/auth';
 import {
@@ -23,30 +24,39 @@ import {
   onSnapshot,
   deleteDoc,
   orderBy,
-  limit
+  limit,
+  Firestore
 } from 'firebase/firestore';
 import { TransactionEntity, ReflectionType, UserProfile } from '../types';
 
-// Firebase client configuration loaded from Vite environment variables with production fallbacks
+// Strictly loaded from environment variables — zero hardcoded keys in the codebase
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyAdpjUFhzGEA4s_ktJG9cdHUhPVJXcACO0',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'wealthhabitsapp.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'wealthhabitsapp',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'wealthhabitsapp.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '270226524718',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:270226524718:web:8d4e112e844afc2738edbf'
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || ''
 };
 
-// Initialize Firebase App singleton
-export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const isFirebaseConfigured = Boolean(
+  firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId
+);
+
+// Initialize Firebase App singleton safely
+export const app: FirebaseApp | null = isFirebaseConfigured
+  ? getApps().length === 0
+    ? initializeApp(firebaseConfig)
+    : getApp()
+  : null;
+
+export const auth: Auth = app ? getAuth(app) : ({ currentUser: null } as unknown as Auth);
+export const db: Firestore | null = app ? getFirestore(app) : null;
 
 // Google Auth Provider setup
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-// Operation Types for error diagnosis
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -77,12 +87,12 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+      userId: auth?.currentUser?.uid,
+      email: auth?.currentUser?.email,
+      emailVerified: auth?.currentUser?.emailVerified,
+      isAnonymous: auth?.currentUser?.isAnonymous,
+      tenantId: auth?.currentUser?.tenantId,
+      providerInfo: auth?.currentUser?.providerData?.map(provider => ({
         providerId: provider.providerId,
         email: provider.email,
       })) || []
@@ -94,14 +104,22 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   return errInfo;
 }
 
-// Authentication Methods
+function ensureAuthReady(): Auth {
+  if (!isFirebaseConfigured || !app) {
+    throw new Error(
+      'Cloud sync is not configured in this environment. Please set VITE_FIREBASE_* environment variables or continue in Guest mode.'
+    );
+  }
+  return auth;
+}
 
 /**
  * Sign in with Google Popup (with redirect fallback for restricted iframes)
  */
 export async function signInWithGoogle(): Promise<User> {
+  const activeAuth = ensureAuthReady();
   try {
-    const result = await signInWithPopup(auth, googleProvider);
+    const result = await signInWithPopup(activeAuth, googleProvider);
     if (result.user) {
       await syncUserProfile(result.user);
     }
@@ -110,7 +128,7 @@ export async function signInWithGoogle(): Promise<User> {
     const error = err as { code?: string; message?: string };
     if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
       try {
-        await signInWithRedirect(auth, googleProvider);
+        await signInWithRedirect(activeAuth, googleProvider);
       } catch (redirectErr) {
         console.warn('Redirect sign-in error:', redirectErr);
       }
@@ -123,7 +141,8 @@ export async function signInWithGoogle(): Promise<User> {
  * Sign in with Email and Password
  */
 export async function signInWithEmail(email: string, pass: string): Promise<User> {
-  const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
+  const activeAuth = ensureAuthReady();
+  const cred = await signInWithEmailAndPassword(activeAuth, email.trim(), pass);
   return cred.user;
 }
 
@@ -131,7 +150,8 @@ export async function signInWithEmail(email: string, pass: string): Promise<User
  * Create a new account with Email and Password
  */
 export async function registerWithEmail(email: string, pass: string, displayName: string): Promise<User> {
-  const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
+  const activeAuth = ensureAuthReady();
+  const cred = await createUserWithEmailAndPassword(activeAuth, email.trim(), pass);
   if (displayName.trim()) {
     await updateProfile(cred.user, { displayName: displayName.trim() });
   }
@@ -143,13 +163,24 @@ export async function registerWithEmail(email: string, pass: string, displayName
  * Reset password via email
  */
 export async function resetPassword(email: string): Promise<void> {
-  await sendPasswordResetEmail(auth, email.trim());
+  const activeAuth = ensureAuthReady();
+  await sendPasswordResetEmail(activeAuth, email.trim());
 }
 
 /**
  * Sign in as Guest / Anonymous user for instant private session
  */
 export async function signInAsGuest(): Promise<User> {
+  if (!isFirebaseConfigured || !app) {
+    // Pure local guest fallback if Firebase env vars aren't set
+    return {
+      uid: `local_guest_${Date.now()}`,
+      isAnonymous: true,
+      displayName: 'Guest Explorer',
+      email: 'guest@wealthhabits.local',
+      photoURL: null
+    } as unknown as User;
+  }
   const cred = await signInAnonymously(auth);
   return cred.user;
 }
@@ -158,6 +189,7 @@ export async function signInAsGuest(): Promise<User> {
  * Log out of Firebase
  */
 export async function logOut(): Promise<void> {
+  if (!isFirebaseConfigured || !app) return;
   await signOut(auth);
 }
 
@@ -184,13 +216,16 @@ export function mapFirebaseUserToProfile(user: User): UserProfile {
  * Sync user profile doc to Firestore
  */
 export async function syncUserProfile(user: User, customName?: string): Promise<void> {
-  if (!user) return;
+  if (!user || !db) return;
   const path = `users/${user.uid}`;
   try {
     const userRef = doc(db, 'users', user.uid);
     const existingSnap = await getDoc(userRef);
 
-    const displayName = customName || user.displayName || (user.isAnonymous ? 'Guest Explorer' : user.email?.split('@')[0] || 'Wealth Habits User');
+    const displayName =
+      customName ||
+      user.displayName ||
+      (user.isAnonymous ? 'Guest Explorer' : user.email?.split('@')[0] || 'Wealth Habits User');
     const email = user.email || (user.isAnonymous ? `${user.uid}@wealthhabits.app` : 'user@wealthhabits.app');
 
     const profileData = {
@@ -212,6 +247,7 @@ export async function syncUserProfile(user: User, customName?: string): Promise<
  * Save transaction to Firestore
  */
 export async function saveTransactionToFirestore(userId: string, tx: TransactionEntity): Promise<void> {
+  if (!db) return;
   const path = `users/${userId}/transactions/${tx.id}`;
   try {
     const txRef = doc(db, 'users', userId, 'transactions', String(tx.id));
@@ -239,6 +275,7 @@ export async function saveTransactionToFirestore(userId: string, tx: Transaction
  * Delete transaction from Firestore
  */
 export async function deleteTransactionFromFirestore(userId: string, txId: number): Promise<void> {
+  if (!db) return;
   const path = `users/${userId}/transactions/${txId}`;
   try {
     const txRef = doc(db, 'users', userId, 'transactions', String(txId));
@@ -256,6 +293,7 @@ export async function saveReflectionToFirestore(
   reflectionId: string,
   reflection: ReflectionType
 ): Promise<void> {
+  if (!db) return;
   const path = `users/${userId}/reflections/${reflectionId}`;
   try {
     const refRef = doc(db, 'users', userId, 'reflections', reflectionId);
@@ -271,69 +309,3 @@ export async function saveReflectionToFirestore(
     );
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
-  }
-}
-
-/**
- * Subscribe to realtime transactions in Firestore with optional limit
- */
-export function subscribeToUserTransactions(
-  userId: string,
-  onUpdate: (txs: TransactionEntity[]) => void,
-  maxLimit: number = 250
-): () => void {
-  const txCollection = collection(db, 'users', userId, 'transactions');
-  const q = query(txCollection, orderBy('timestamp', 'desc'), limit(maxLimit));
-
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const items: TransactionEntity[] = [];
-      snapshot.forEach((docSnap) => {
-        const d = docSnap.data();
-        items.push({
-          id: Number(d.id) || Date.now(),
-          amount: Number(d.amount) || 0,
-          type: d.type as 'DEBIT' | 'CREDIT',
-          category: d.category,
-          narration: d.narration || '',
-          bankName: d.bankName || null,
-          source: d.source || 'MANUAL',
-          timestamp: Number(d.timestamp) || Date.now(),
-          reflection: d.reflection || null
-        });
-      });
-      items.sort((a, b) => b.timestamp - a.timestamp);
-      onUpdate(items);
-    },
-    (_error) => {
-      const fallbackQ = query(txCollection, limit(maxLimit));
-      return onSnapshot(fallbackQ, (snapshot) => {
-        const items: TransactionEntity[] = [];
-        snapshot.forEach((docSnap) => {
-          const d = docSnap.data();
-          items.push({
-            id: Number(d.id) || Date.now(),
-            amount: Number(d.amount) || 0,
-            type: d.type as 'DEBIT' | 'CREDIT',
-            category: d.category,
-            narration: d.narration || '',
-            bankName: d.bankName || null,
-            source: d.source || 'MANUAL',
-            timestamp: Number(d.timestamp) || Date.now(),
-            reflection: d.reflection || null
-          });
-        });
-        items.sort((a, b) => b.timestamp - a.timestamp);
-        onUpdate(items);
-      });
-    }
-  );
-}
-
-/**
- * Auth state listener
- */
-export function onAuthUserChanged(callback: (user: User | null) => void): () => void {
-  return onAuthStateChanged(auth, callback);
-}
